@@ -13,7 +13,7 @@ signed in — the first of the three sign-in attempts in [`sign-in.md`](sign-in.
 Every verb is a **type**, a **verb**, and then its arguments:
 
 ```
-btid <type> <verb> [query] [order] [--json]
+btid <type> <verb> [query] [order] [--fields a,b,c] [--json]
 
   type   task | project | person | store
   verb   ls | show | new | edit | ...        (per type, below)
@@ -29,7 +29,7 @@ btid <type> <verb> [query] [order] [--json]
 Reads share one shape, which is the whole point of the standardisation:
 
 ```
-btid task ls [query] [order] [--json]
+btid task ls [query] [order] [--fields a,b] [--json]
 btid project ls [query] [order] [--json]
 btid person ls [query] [order] [--json]
 
@@ -39,8 +39,46 @@ btid person show <login> [--json]
 ```
 
 `[query]` is the app's own filter syntax; `[order]` is one bare word (`due`, `updated`, `priority`, `title`) — bare because
-query terms always carry an `=`, so the two cannot be confused, and neither needs quoting. `--json` prints the core's rows
+query terms always carry an `=`, so the two cannot be confused, and neither needs quoting. `--json` prints the rows
 unchanged.
+
+### `--fields`: the row is the core's, the columns are the terminal's
+
+The core answers with whole rows, and it should — a projection in the core would be a second definition of what a task is,
+and the first front end to want one more field would edit it. But a table of six columns out of twenty is what a terminal
+is for, so the CLI projects:
+
+```
+$ btid task ls project=alpha --fields title,status,endDate
+TITLE    STATUS       END DATE
+task1    in progress  Tue 25 Nov
+
+$ btid task ls project=alpha --fields title,status,endDate --json
+[{"title":"task1","status":"in_progress","endDate":"2026-11-25T17:00"}]
+```
+
+Four rules, and they are what keeps this from becoming a second schema:
+
+- **Field names are the row's own**, in camelCase — `endDate`, `definitionOfDone`, `estimateDays`, `firstPromotedAt`. No
+  aliases, because an alias is a second name for something that already has one.
+- **`--fields` projects `--json` too.** One projection, two renderings: what the table shows and what the script gets are
+  the same object, so they cannot drift.
+- **An unknown field is a usage error (`2`), and the message lists the fields the rows actually have** — read off the rows,
+  not from a hand-kept list, so a new field in the core appears in the CLI the day it lands there.
+- **No computed columns.** `--fields` selects; it never calculates. `days` is `estimateDays` rendered, `due` is
+  `endDate` rendered, and both are **default** columns rather than fields you can ask for — a terminal that invents
+  `velocity` is a terminal disagreeing with the app.
+
+Defaults, per type, so the common case needs no flags:
+
+| type | default columns |
+| --- | --- |
+| `task` | `id`, `title`, `status`, `assigneeId`, `estimateDays`, `endDate` |
+| `project` | `id`, `name`, `status`, `startDate`, `endDate`, `ownerId` |
+| `person` | `id`, `role`, `active`, `githubHandle` |
+
+`show` prints everything and takes `--fields` for the same reason: a script that wants two fields from one task should not
+have to `jq` a full row to get them.
 
 Three verbs sit outside the table because they are not about one type: `btid whoami` (the session), `btid task week` and
 `btid task stats` (reports over tasks, which is what they are about).
@@ -90,7 +128,7 @@ The `DAYS` column is `estimateDays`, and a small task shows its hours-only booki
 `DUE` says what the board says: `today`, `Fri 14 Nov`, or `—` when nothing is promised. The trailing `due` is the order.
 
 ```
-$ btid task ls project=alpha status=done updated=since:2026-11-01 title
+$ btid task ls project=alpha status=done updated>=2026-11-01 title
 ```
 
 Filters are the same words the app's filters use, because they are answered by the same query in `btid-core`. A flag
