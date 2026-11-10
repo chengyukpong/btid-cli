@@ -598,6 +598,9 @@ specification, and the one nobody regenerates.
 **The one thing that stays human:** the refusal sentences. They come from `btid-core`, so the CLI cannot promise their
 wording in a manifest without duplicating it. It promises the *shape* of a refusal and the exit code, and leaves the words
 to the core that owns them.
+
+---
+
 ## What the transcript pins down
 
 **The actor is resolved before every command, and in two steps.** The token answers *who GitHub says you are*; the
