@@ -87,16 +87,8 @@ storage unit is mandays, and the terminal is a place to convert it back.
 ## 4. Moving a task — and the rule that proves the boundary
 
 ```
-$ btid move T-42 done
-error: Refusing to finish T-42: 2 of 3 steps are still open.
-```
-
-That is `btid-core`'s refusal, printed verbatim. The CLI has no opinion about steps; it printed what the command
-returned, and exited 1.
-
-```
 $ btid edit T-42 --end 2026-11-14
-error: Changing the end day of a tracked task needs a reason. Pass --note, or untrack it first.
+error: This task is tracked: moving its end date to a later day needs a reason.
 ```
 
 This is the sentence the whole extraction was for. In the app it lived in a store, so a CLI would have had to remember
@@ -106,6 +98,10 @@ to ask. Here the command refuses on its own, and the CLI's only job is to have a
 $ btid edit T-42 --end 2026-11-14 --note "the PM half moved to Friday"
 edited T-42 · endDate 2026-11-11T12:00 → 2026-11-14T17:00 · 1 commit
 ```
+
+Note what the first transcript got wrong before this was checked against the code: there is **no** "2 of 3 steps are still
+open" refusal. Unticked steps on a finished task are a warning the board shows, not a gate — so `btid move T-42 done`
+succeeds and the CLI prints the warning beside it rather than pretending the command refused.
 
 `· 1 commit` is literal: one command, one `flush`. The next line in the terminal could be `git log` in the repository
 and it would show that one commit with the note in it.
@@ -231,6 +227,113 @@ The way out is a person, which is what a roster is for.
 
 ---
 
+## 10. The whole life of one task, start to finish
+
+The flow a person actually performs, in order, with the files it needs. Every line is one command and one commit, and
+every refusal is the core's.
+
+```
+$ cat alpha.json
+{ "id": "alpha", "name": "Alpha", "startDate": "2026-11-01", "endDate": "2026-12-31" }
+
+$ btid project new --file alpha.json
+created alpha · owner chengyukpong · 1 commit
+```
+
+The dates are in the file for one reason: without them `captureRefusal` refuses to let the project take work at all —
+*"Alpha needs a start date and an end date before it can take new work."* The app asks for them a step later; the file
+just carries them from the start.
+
+```
+$ cat t1.json
+{ "projectId": "alpha", "title": "task1", "priority": "high" }
+
+$ btid task new --file t1.json
+created alpha-1 · backlog · 1 commit
+```
+
+A new task is always `backlog` and belongs to a project; the id is minted (`<project>-<n>`) and never re-minted.
+
+```
+$ btid promote alpha-1
+error: Before promotion: add a title, an owner, a start date, an end date, an estimate and a definition of done.
+```
+
+All six fields, in the core's words. Filling them is one edit, so it takes a file too:
+
+```
+$ cat t1-fields.json
+{
+  "assigneeId": "chengyukpong",
+  "startDate": "2026-11-11",
+  "endDate": "2026-11-18",
+  "estimateDays": 3,
+  "definitionOfDone": "task1 is visible on the board with a date and an owner."
+}
+
+$ btid edit alpha-1 --file t1-fields.json
+edited alpha-1 · 5 fields · 1 commit
+
+$ btid promote alpha-1
+promoted alpha-1 · backlog → todo · 1 commit
+```
+
+```
+$ btid edit alpha-1 --tracked
+edited alpha-1 · tracked false → true · 1 commit
+
+$ btid move alpha-1 in-progress
+moved alpha-1 · todo → in progress · 1 commit
+```
+
+`in-progress` is accepted and normalised to the stored `in_progress` — a spelling convenience at the argument layer, not a
+rule. The status itself is just a field; nothing refuses this move.
+
+```
+$ btid edit alpha-1 --end 2026-11-25
+error: This task is tracked: moving its end date to a later day needs a reason.
+
+$ btid edit alpha-1 --end 2026-11-25 --note "the client review moved a week"
+edited alpha-1 · endDate 2026-11-18T17:00 → 2026-11-25T17:00 · 1 commit
+```
+
+That pair is the boundary in one screen. The CLI did not decide that a note was needed — it passed `--note` through and
+printed what came back.
+
+```
+$ btid edit alpha-1 --progress 100
+edited alpha-1 · percentComplete 60 → 100 · 1 commit
+```
+
+Progress is not a move: it is a field, and finishing is a status. They are separate commands because they are separate
+decisions.
+
+```
+$ btid move alpha-1 done
+moved alpha-1 · in progress → done · 1 commit
+```
+
+Nothing gates this one. The steps, if any are open, come back as a warning printed under the line — the board would show
+the same thing, and a warning is not a refusal.
+
+```
+$ btid show alpha-1
+alpha-1  task1                                    Alpha · done · high
+         owner chengyukpong · created 2026-11-11 by chengyukpong
+         start 2026-11-11T09:00   end 2026-11-25T17:00   estimate 3 md
+
+  Activity (7)
+  2026-11-11  created
+  2026-11-11  promoted  backlog → todo
+  2026-11-11  tracked   false → true
+  2026-11-11  status    todo → in progress
+  2026-11-11  endDate   2026-11-18T17:00 → 2026-11-25T17:00   "the client review moved a week"
+  2026-11-11  percentComplete  60 → 100
+  2026-11-11  status    in progress → done
+```
+
+Seven commits for seven writes, and the note is in the history where a reviewer will look for it. That is the whole
+point of the split: `git log` of the store repository is the audit trail, and it does not care which front end wrote it.
 ## What the transcript pins down
 
 **The actor is resolved before every command, and in two steps.** The token answers *who GitHub says you are*; the
@@ -238,8 +341,8 @@ roster answers *who you are here*. A login with no roster row is a refusal namin
 read or written before that, which is why no verb takes an `--as`: a flag that claims another identity is a flag that
 lies about who did the work, and every activity row in the store records one.
 
-**Every `new` takes a file.** Creation is the one verb whose input is a shape rather than a value, so it does not take a
-pile of flags — it takes JSON:
+**Every verb that takes more than one field takes a file.** `new` is the obvious case, but filling six fields of a task is
+the same problem, so `edit` accepts one too. One field gets a flag; a shape gets JSON.
 
 ```
 $ btid task new --file tasks/short-hours.json
