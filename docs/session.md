@@ -38,7 +38,7 @@ btid project show <id> [--json]
 btid person show <login> [--json]
 ```
 
-`[query]` is the app's own filter syntax; `[order]` is one bare word (`due`, `updated`, `priority`, `title`) — bare because
+`[query]` is the app's own filter syntax; `[order]` is one bare word (`endDate`, `updatedAt`, `priority`, `title`) — bare because
 query terms always carry an `=`, so the two cannot be confused, and neither needs quoting. `--json` prints the rows
 unchanged.
 
@@ -49,11 +49,11 @@ and the first front end to want one more field would edit it. But a table of six
 is for, so the CLI projects:
 
 ```
-$ btid task ls project=alpha --fields title,status,endDate
+$ btid task ls projectId=alpha --fields title,status,endDate
 TITLE    STATUS       END DATE
 task1    in progress  Tue 25 Nov
 
-$ btid task ls project=alpha --fields title,status,endDate --json
+$ btid task ls projectId=alpha --fields title,status,endDate --json
 [{"title":"task1","status":"in_progress","endDate":"2026-11-25T17:00"}]
 ```
 
@@ -117,7 +117,7 @@ with a terminal tool is put it in a `for` loop.
 ## 2. What is on my plate
 
 ```
-$ btid task ls owner=me due
+$ btid task ls assigneeId=me endDate
 ID       TITLE                                 PROJECT  STATUS       DAYS  DUE
 T-42     Short tasks in hours                  Alpha    in progress  0.5   today
 T-77     Board page render time                Alpha    todo         1.5   Fri 14 Nov
@@ -128,7 +128,7 @@ The `DAYS` column is `estimateDays`, and a small task shows its hours-only booki
 `DUE` says what the board says: `today`, `Fri 14 Nov`, or `—` when nothing is promised. The trailing `due` is the order.
 
 ```
-$ btid task ls project=alpha status=done updated>=2026-11-01 title
+$ btid task ls projectId=alpha status=done updatedAt>=2026-11-01 title
 ```
 
 Filters are the same words the app's filters use, because they are answered by the same query in `btid-core`. A flag
@@ -418,14 +418,14 @@ Reading is the half of a tracker people use most, so it gets **one** shape rathe
 
 ```
 $ btid task ls                              # the whole store, one flat table
-$ btid task ls project=alpha                # one project
-$ btid task ls owner=me status=todo         # narrow inside it
-$ btid task ls due<=2026-11-15 label=urgent # the signals the board draws
-$ btid task ls text=auth updated>=2026-11-01  # free text, and recency
+$ btid task ls projectId=alpha                 # one project
+$ btid task ls assigneeId=me status=todo       # narrow inside it
+$ btid task ls endDate<=2026-11-15 labels=urgent # the signals the board draws
+$ btid task ls text=auth updatedAt>=2026-11-01  # free text, and recency
 $ btid task ls group=status                 # sectioned, by one of the board's groupings
 ```
 
-**Grouping is a query term, not a flag** — `group=project`, `group=status`, `group=owner`, `group=priority`,
+**Grouping is a query term, not a flag** — `group=projectId`, `group=status`, `group=assigneeId`, `group=priority`,
 `group=label` — because the board already has that vocabulary and `readCompactQuery` already parses it into `groupBy`.
 Deferred: the **sectioned rendering**. Today a `group=` query still filters and orders correctly and prints one flat table,
 so nothing is silently wrong; the grouped layout arrives with the verb, and it will need no grammar change because the
@@ -435,12 +435,12 @@ That is not a syntax invented for the terminal. `btid-core` already parses it �
 turns the app's URL fragment into a scope and a narrowing — so a link copied out of the browser is a query the CLI
 understands, character for character. The CLI's job is to split argv on spaces, join it back, and hand it over.
 
-The two lookups it has to supply are the store's own: `project=alpha` resolves a project **name** to its id, `owner=cheng`
+The two lookups it has to supply are the store's own: `projectId=alpha` resolves a project **name** to its id, `assigneeId=cheng`
 a GitHub handle to a person id. They come from the rows just loaded, never from a hardcoded map — which is why a store
 with a project called `auth` and a person called `auth` is a question the core answers, not the CLI.
 
 ```
-$ btid task ls project=alpha status=in-progress
+$ btid task ls projectId=alpha status=in-progress
 ID       TITLE                        OWNER          DUE         DAYS
 alpha-1  task1                        chengyukpong   Tue 25 Nov  3
 
@@ -464,7 +464,7 @@ store is nearly empty — the sentence says what was hidden, in the same words t
 | `btid whoami` | roster row for the token's login | who you are here, and what you may do |
 
 ```
-$ btid task stats project=alpha
+$ btid task stats projectId=alpha
 Alpha                        6 tasks   2 done   3 in progress   1 todo
   mandays                    booked 11.5 / estimated 14          (1 short task booked in hours)
 
@@ -512,12 +512,12 @@ btid task ls [query] [order] [--fields a,b] [--json]
 
   List tasks. One load, no commit.
 
-  query    project= owner= status= priority= label= text= tracked= blocked=
-           group= (project|status|owner|priority|label)
-           updated>=DAY  updated<=DAY  due<=DAY
-  order    due | updated | priority | title | id
+  query    projectId= assigneeId= status= priority= labels= text= tracked= blocked=
+           group= (projectId|status|assigneeId|priority|label)
+           updatedAt>=DAY  updatedAt<=DAY  endDate<=DAY
+  order    endDate | updatedAt | priority | title | id
 
-  $ btid task ls project=alpha status=todo due
+  $ btid task ls projectId=alpha status=todo due
 
   --fields limits the columns and the JSON alike; --json prints rows unchanged.
 ```
