@@ -334,6 +334,75 @@ alpha-1  task1                                    Alpha · done · high
 
 Seven commits for seven writes, and the note is in the history where a reviewer will look for it. That is the whole
 point of the split: `git log` of the store repository is the audit trail, and it does not care which front end wrote it.
+## 11. Queries: one syntax, and it is the app's
+
+Reading is the half of a tracker people use most, so it gets **one** shape rather than a flag per thought:
+
+```
+$ btid ls                              # the whole store, grouped by project
+$ btid ls project=alpha                # one project
+$ btid ls owner=me status=todo         # narrow inside it
+$ btid ls due=overdue label=urgent     # the signals the board draws
+$ btid ls text=auth updated=week       # free text, and recency
+```
+
+That is not a syntax invented for the terminal. `btid-core` already parses it — `readFilterQuery(text, lookups)` is what
+turns the app's URL fragment into a scope and a narrowing — so a link copied out of the browser is a query the CLI
+understands, character for character. The CLI's job is to split argv on spaces, join it back, and hand it over.
+
+The two lookups it has to supply are the store's own: `project=alpha` resolves a project **name** to its id, `owner=cheng`
+a GitHub handle to a person id. They come from the rows just loaded, never from a hardcoded map — which is why a store
+with a project called `auth` and a person called `auth` is a question the core answers, not the CLI.
+
+```
+$ btid ls project=alpha status=in-progress
+ID       TITLE                        OWNER          DUE         DAYS
+alpha-1  task1                        chengyukpong   Tue 25 Nov  3
+
+3 of 10 tasks · project Alpha · status in progress
+```
+
+The footer is `describeFilters`'s sentence. It exists because the most common misreading of a filtered list is that the
+store is nearly empty — the sentence says what was hidden, in the same words the app's filter chips use.
+
+**The verbs that read, and what each answers:**
+
+| verb | the core it calls | answers |
+| --- | --- | --- |
+| `btid ls [query]` | `readFilterQuery` + `taskFilters` + `boardSort` | which tasks, in board order |
+| `btid show <id>` | one row | one task: fields, steps, comments, activity |
+| `btid stats [query]` | `summarise` | counts and mandays by status, priority, project |
+| `btid week [--weeks n]` | `weekActivity` | what closed or fell due this week, back `n` weeks |
+| `btid person <login>` | `personActivities` | what one person did, week by week |
+| `btid project ls` / `show <id>` | project rows | the portfolio |
+| `btid people` | roster rows | who is on it, their role, active or not |
+| `btid whoami` | roster row for the token's login | who you are here, and what you may do |
+
+```
+$ btid stats project=alpha
+Alpha                        6 tasks   2 done   3 in progress   1 todo
+  mandays                    booked 11.5 / estimated 14          (1 short task booked in hours)
+
+$ btid week --weeks 3
+              W44      W45      W46
+finished      2        1        0
+due           3        2        1
+```
+
+```
+$ btid person chengyukpong
+chengyukpong · manager · active
+  this week   3 edits   1 comment   2 steps ticked   task1 finished
+```
+
+**Three rules that keep queries honest:**
+
+- **A query verb never writes.** No `sync`, no `flush`, no scheduled commit — the transcript's read verbs are read-only by
+  construction, not by care. A CLI that saves while you look at it is a daemon, and this is not one.
+- **`--json` prints the core's rows unchanged.** The table is a rendering of the same array, so a test asserts on the JSON
+  and the human output cannot drift from it.
+- **Ordering is the board's, not the terminal's.** `boardSort` decides, because two front ends sorting a list differently
+  is the same class of bug as two front ends wording a refusal differently.
 ## What the transcript pins down
 
 **The actor is resolved before every command, and in two steps.** The token answers *who GitHub says you are*; the
