@@ -79,7 +79,7 @@ with a terminal tool is put it in a `for` loop.
 ## 2. What is on my plate
 
 ```
-$ btid task ls --mine
+$ btid task ls owner=me due
 ID       TITLE                                 PROJECT  STATUS       DAYS  DUE
 T-42     Short tasks in hours                  Alpha    in progress  0.5   today
 T-77     Board page render time                Alpha    todo         1.5   Fri 14 Nov
@@ -87,14 +87,14 @@ T-91     The store refuses a stale write       Beta     backlog      —     —
 ```
 
 The `DAYS` column is `estimateDays`, and a small task shows its hours-only booking as the fraction it is stored as.
-`DUE` says what the board says: `today`, `Fri 14 Nov`, or `—` when nothing is promised.
+`DUE` says what the board says: `today`, `Fri 14 Nov`, or `—` when nothing is promised. The trailing `due` is the order.
 
 ```
-$ btid task ls --project alpha --status done --since 2026-11-01
+$ btid task ls project=alpha status=done updated=since:2026-11-01 title
 ```
 
 Filters are the same words the app's filters use, because they are answered by the same query in `btid-core`. A flag
-here that the app cannot express is a flag that will disagree with it.
+here that the app cannot express is a flag that will disagree with it — which is why there are none.
 
 ## 3. One task, in full
 
@@ -168,8 +168,12 @@ error: Before promotion: add a title, an owner, a start date, an end date, an es
 The gate is the core's, in the core's words. The CLI does not count what is missing and it does not phrase the list.
 
 ```
-$ btid task edit T-91 --assignee ivan --start 2026-11-17 --end 2026-11-19 --estimate 3 --dod "A stale write is refused, not lost."
-edited T-91 · 4 fields → 1 commit
+$ cat t91.json
+{ "assigneeId": "ivan", "startDate": "2026-11-17", "endDate": "2026-11-19",
+  "estimateDays": 3, "definitionOfDone": "A stale write is refused, not lost." }
+
+$ btid task edit T-91 --file t91.json
+edited T-91 · 5 fields → 1 commit
 
 $ btid task promote T-91
 promoted T-91 · backlog → todo · 1 commit
@@ -201,10 +205,10 @@ ID      NAME    OWNER          TASKS  CREATED
 alpha   Alpha   chengyukpong   6      2026-11-03
 beta    Beta    yukfile        4      2026-11-05
 
-$ btid project new gamma "Gamma"
+$ btid project new --file projects/gamma.json
 error: Only the manager can create projects.
 
-$ btid project new gamma "Gamma" --color '#7E57C2'
+$ btid project new --file projects/gamma.json --color '#7E57C2'
 created gamma · owner chengyukpong · 1 commit
 
 $ btid project new --file projects/gamma.json
@@ -405,7 +409,7 @@ store is nearly empty — the sentence says what was hidden, in the same words t
 
 | verb | the core it calls | answers |
 | --- | --- | --- |
-| `btid task ls [query]` | `readFilterQuery` + `taskFilters` + `boardSort` | which tasks, in board order |
+| `btid task ls [query] [order]` | `readFilterQuery` + `taskFilters` + `boardSort` | which tasks, in board order |
 | `btid task show <id>` | one row | one task: fields, steps, comments, activity |
 | `btid task stats [query]` | `summarise` | counts and mandays by status, priority, project |
 | `btid task week [--weeks n]` | `weekActivity` | what closed or fell due this week, back `n` weeks |
@@ -463,8 +467,9 @@ field is refused by the schema with the field named rather than by a flag parser
 
 Flags stay for the small edits (`--end`, `--note`, `--estimate`), because a `--file` for one field is worse than a flag.
 
-**Naming.** The binary is `btid`; a verb is one word (`ls`, `show`, `move`, `edit`, `promote`, `step`, `comment`,
-`task`, `project`, `person`, `store`). Two-word verbs are the exception (`step add`), and only where the noun is shared.
+**Naming.** The binary is `btid`, then a **type** (`task`, `project`, `person`, `store`), then a verb (`ls`, `show`, `new`,
+`edit`, …). Three levels, always — no verb exists at the top level except `whoami`, so a person who has learned one command
+can guess the next one.
 
 **The store is configuration, in that order:** `--store owner/repo@branch`, then `BTID_STORE`, then a config file at a
 documented path; no config is an error naming all three. Never a default repository — the transcript's second line of
