@@ -417,12 +417,19 @@ point of the split: `git log` of the store repository is the audit trail, and it
 Reading is the half of a tracker people use most, so it gets **one** shape rather than a flag per thought:
 
 ```
-$ btid task ls                              # the whole store, grouped by project
+$ btid task ls                              # the whole store, one flat table
 $ btid task ls project=alpha                # one project
 $ btid task ls owner=me status=todo         # narrow inside it
-$ btid task ls due=overdue label=urgent     # the signals the board draws
-$ btid task ls text=auth updated=week       # free text, and recency
+$ btid task ls due<=2026-11-15 label=urgent # the signals the board draws
+$ btid task ls text=auth updated>=2026-11-01  # free text, and recency
+$ btid task ls group=status                 # sectioned, by one of the board's groupings
 ```
+
+**Grouping is a query term, not a flag** — `group=project`, `group=status`, `group=assignee`, `group=priority`,
+`group=label` — because the board already has that vocabulary and `readCompactQuery` already parses it into `groupBy`.
+Deferred: the **sectioned rendering**. Today a `group=` query still filters and orders correctly and prints one flat table,
+so nothing is silently wrong; the grouped layout arrives with the verb, and it will need no grammar change because the
+intent is already in the parsed query.
 
 That is not a syntax invented for the terminal. `btid-core` already parses it — `readFilterQuery(text, lookups)` is what
 turns the app's URL fragment into a scope and a narrowing — so a link copied out of the browser is a query the CLI
