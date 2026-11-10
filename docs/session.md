@@ -542,6 +542,57 @@ Three conventions:
   consumes, and it costs nothing because the registry already exists.
 - **Help never lists refusals.** Those come from `btid-core` at run time, in the core's words; a help page that quoted them
   would be a second copy free to drift. It says what the verb takes, not what it may say no to.
+## 13. What an agent needs, which is not a README
+
+A person learns a CLI by using it. An agent learns it by reading **one machine-readable thing** and trusting it, because it
+cannot afford to discover behaviour by failing at it: every wrong guess is a round trip, and a write it guesses wrong at is a
+commit somebody has to undo.
+
+So the CLI's contract has to be *askable*, not documented:
+
+```
+$ btid help --json
+{
+  "version": "0.1.0",
+  "types": {
+    "task": {
+      "verbs": {
+        "ls":     { "usage": "...", "arguments": {...}, "example": "...", "reads": true,  "writes": false },
+        "edit":   { "usage": "...", "input": { "$ref": "#/schemas/taskInput" }, "writes": true },
+        "promote":{ ... , "requires": ["title","assigneeId","startDate","endDate","estimateDays","definitionOfDone"] }
+      }
+    }
+  },
+  "schemas": { "task": { ...JSON Schema... }, "project": {...}, "person": {...} },
+  "query":   { "keys": {...}, "orders": [...], "groups": [...] },
+  "exit":    { "0": "ok", "1": "refused", "2": "usage" }
+}
+```
+
+Four things make that worth more than prose, and each is a rule rather than a feature:
+
+- **It is generated from the registry the parser reads.** A help file written by hand is a second specification, and the
+  second one goes stale — which is the failure this whole family of projects exists to prevent. `btid help --json` and
+  `btid help task ls` are two renderings of one table.
+- **The schemas are the core's own, exported as JSON Schema.** `TaskSchema`, `ProjectSchema`, `UserSchema` are zod objects;
+  the core can render them, so the agent learns the *fields* — `endDate`, `estimateDays`, the `status` and `priority`
+  enums — from the same definitions the store validates with. A hand-written list of fields would be a fifth copy of what a
+  task is.
+- **Every write has `--dry-run`.** Cheap here for the reason the whole design is layered: a command never flushes, the CLI
+  does. So a dry run runs the command, prints its result — refusal or not — and skips the one call that commits. An agent
+  can therefore *ask* "would this work?" without writing anything, which is the single most valuable property a CLI can
+  offer to something that is not sure.
+- **Failures are data too.** With `--json`, a refusal prints `{"error": {"kind": "refused", "message": "<the core's words>"}}`
+  and exits 1; a usage error prints its own shape and exits 2. An agent that has to parse English to tell "the rule said no"
+  from "I typed it wrong" will eventually get it wrong.
+
+**What is deliberately *not* offered:** a natural-language or "smart" interface. The agent reads the manifest and composes
+commands; the CLI stays a compiler for arguments. A tool that guesses what you meant cannot be tested, and this one is
+tested by asserting on `--json`.
+
+**The one thing that stays human:** the refusal sentences. They come from `btid-core`, so the CLI cannot promise their
+wording in a manifest without duplicating it. It promises the *shape* of a refusal and the exit code, and leaves the words
+to the core that owns them.
 ## What the transcript pins down
 
 **The actor is resolved before every command, and in two steps.** The token answers *who GitHub says you are*; the

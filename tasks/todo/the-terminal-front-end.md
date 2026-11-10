@@ -29,6 +29,9 @@ move, edit, step, comment, promote, week — with every refusal printed in the c
 - [ ] `--fields a,b` on every read: projects the same object for the table and for `--json`; an unknown field is a usage error listing what the rows have
 - [ ] `btid help`, `btid help <type>`, `btid help <type> <verb>`, and `--help` on any verb — all generated from the one command registry the parser reads
 - [ ] `btid help --json` emits that registry, for shell completion
+- [ ] `btid help --json`: one manifest — verbs, arguments, input schemas, query keys, exit codes — generated from the registry
+- [ ] `--dry-run` on every write: run the command, print the result, skip the one `flush`
+- [ ] `--json` failures are data: `{"error":{"kind":"refused","message":"…"}}` with exit 1
 - [ ] Exit codes: `0` ok, `1` a refusal, `2` usage
 
 ## How to verify
