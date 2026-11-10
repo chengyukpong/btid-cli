@@ -488,6 +488,53 @@ chengyukpong · manager · active
   and the human output cannot drift from it.
 - **Ordering is the board's, not the terminal's.** `boardSort` decides, because two front ends sorting a list differently
   is the same class of bug as two front ends wording a refusal differently.
+## 12. `btid help`, and why it is generated
+
+```
+$ btid help
+btid — the tracker, from a terminal
+
+  btid <type> <verb> [query] [order] [--fields a,b] [--json]
+  btid whoami
+
+  task      ls show week stats | new edit move promote step comment archive
+  project   ls show           | new edit archive
+  person    ls show           | new edit
+  store     whoami            | init
+
+  btid help task ls      one verb, with its arguments and an example
+  btid help task         every verb of a type
+```
+
+```
+$ btid help task ls
+btid task ls [query] [order] [--fields a,b] [--json]
+
+  List tasks. One load, no commit.
+
+  query    project= owner= status= priority= label= text= tracked= blocked=
+           group= (project|status|owner|priority|label)
+           updated>=DAY  updated<=DAY  due<=DAY
+  order    due | updated | priority | title | id
+
+  $ btid task ls project=alpha status=todo due
+
+  --fields limits the columns and the JSON alike; --json prints rows unchanged.
+```
+
+**The help text is generated from the same table that parses the arguments.** One registry of `type → verb → { usage,
+arguments, example }`, and the parser, the help and the future shell completion all read it. Hand-written help is a
+second specification, and the second specification is always the one that goes stale — which is exactly the failure this
+project exists to prevent, one layer down.
+
+Three conventions:
+
+- **`--help` is the same page.** `btid task ls --help` prints what `btid help task ls` prints, because a person who types
+  the wrong thing should not have to learn a second command to find out.
+- **`btid help --json`** emits the registry: `[{type, verb, usage, arguments, example}]`. That is what a completion script
+  consumes, and it costs nothing because the registry already exists.
+- **Help never lists refusals.** Those come from `btid-core` at run time, in the core's words; a help page that quoted them
+  would be a second copy free to drift. It says what the verb takes, not what it may say no to.
 ## What the transcript pins down
 
 **The actor is resolved before every command, and in two steps.** The token answers *who GitHub says you are*; the
