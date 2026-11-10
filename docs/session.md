@@ -590,7 +590,10 @@ Four things make that worth more than prose, and each is a rule rather than a fe
 commands; the CLI stays a compiler for arguments. A tool that guesses what you meant cannot be tested, and this one is
 tested by asserting on `--json`.
 
-**And the README points at the manifest, it does not replace it.** `README.md` carries one short "For an agent" section —\nrun `btid help --json`, then the three-step loop — because a model that lands in this repository needs to know the binary\ncan be asked. Everything it *then* needs comes from the binary. A README describing the verbs would be a second\nspecification and the one nobody regenerates.
+**And the README points at the manifest, it does not replace it.** `README.md` carries one short "For an agent" section —
+run `btid help --json`, then the three-step loop — because a model that lands in this repository needs to know the binary
+can be asked. Everything it *then* needs comes from the binary. A README describing the verbs would be a second
+specification, and the one nobody regenerates.
 
 **The one thing that stays human:** the refusal sentences. They come from `btid-core`, so the CLI cannot promise their
 wording in a manifest without duplicating it. It promises the *shape* of a refusal and the exit code, and leaves the words
