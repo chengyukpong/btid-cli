@@ -24,7 +24,7 @@ move, edit, step, comment, promote, week — with every refusal printed in the c
 - [ ] Every `new` takes `--file <json>` (or `-` for stdin): the command's input, not the row — no id, no timestamps
 - [ ] Write verbs: `move`, `edit`, `promote`, `step add|done`, `comment`, `project new|archive` — one command, one `flush`, one commit
 - [ ] `--json` on every verb, asserting on the core's plain result rather than on a rendering
-- [ ] `group=project|status|assignee|priority|label` as a **query term** (the parser already fills `groupBy`), with a flat table until the sectioned rendering lands
+- [ ] `group=project|status|owner|priority|label` as a **query term** (the parser already fills `groupBy`), with a flat table until the sectioned rendering lands
 - [ ] `--fields a,b` on every read: projects the same object for the table and for `--json`; an unknown field is a usage error listing what the rows have
 - [ ] Exit codes: `0` ok, `1` a refusal, `2` usage
 

@@ -425,7 +425,7 @@ $ btid task ls text=auth updated>=2026-11-01  # free text, and recency
 $ btid task ls group=status                 # sectioned, by one of the board's groupings
 ```
 
-**Grouping is a query term, not a flag** — `group=project`, `group=status`, `group=assignee`, `group=priority`,
+**Grouping is a query term, not a flag** — `group=project`, `group=status`, `group=owner`, `group=priority`,
 `group=label` — because the board already has that vocabulary and `readCompactQuery` already parses it into `groupBy`.
 Deferred: the **sectioned rendering**. Today a `group=` query still filters and orders correctly and prints one flat table,
 so nothing is silently wrong; the grouped layout arrives with the verb, and it will need no grammar change because the
