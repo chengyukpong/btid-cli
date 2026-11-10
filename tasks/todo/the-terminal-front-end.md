@@ -25,6 +25,7 @@ move, edit, step, comment, promote, week — with every refusal printed in the c
 - [ ] Write verbs: `move`, `edit`, `promote`, `step add|done`, `comment`, `project new|archive` — one command, one `flush`, one commit
 - [ ] `--json` on every verb, asserting on the core's plain result rather than on a rendering
 - [ ] `group=projectId|status|assigneeId|priority|label` as a **query term** (the parser already fills `groupBy`), with a flat table until the sectioned rendering lands
+- [ ] `[order]` accepts a composite (`endDate,priority`) and `-` for descending; nulls sort last
 - [ ] `--fields a,b` on every read: projects the same object for the table and for `--json`; an unknown field is a usage error listing what the rows have
 - [ ] `btid help`, `btid help <type>`, `btid help <type> <verb>`, and `--help` on any verb — all generated from the one command registry the parser reads
 - [ ] `btid help --json` emits that registry, for shell completion

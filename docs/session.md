@@ -38,9 +38,16 @@ btid project show <id> [--json]
 btid person show <login> [--json]
 ```
 
-`[query]` is the app's own filter syntax; `[order]` is one bare word (`endDate`, `updatedAt`, `priority`, `title`) — bare because
-query terms always carry an `=`, so the two cannot be confused, and neither needs quoting. `--json` prints the rows
-unchanged.
+`[query]` is the app's own filter syntax; `[order]` is one bare token — `endDate`, `endDate,priority`, or
+`-priority,endDate` — bare because query terms always carry an `=`, so the two cannot be confused, and neither needs
+quoting. `--json` prints the rows unchanged.
+
+**`[order]` is a list, not a field.** `endDate,priority` sorts by the first and then the other; a leading `-` reverses
+that key, so `-priority,endDate` is most urgent first and earliest promise second. It is still one token — no `=` in it —
+so it cannot collide with a query term, and a composite order is what most real questions want.
+
+**Nulls sort last in both directions.** A task with no end date is not "earliest", it is unplanned, and burying it is the
+only reading that does not lie.
 
 ### `--fields`: the row is the core's, the columns are the terminal's
 
@@ -117,7 +124,7 @@ with a terminal tool is put it in a `for` loop.
 ## 2. What is on my plate
 
 ```
-$ btid task ls assigneeId=me endDate
+$ btid task ls assigneeId=me -priority,endDate
 ID       TITLE                                 PROJECT  STATUS       DAYS  DUE
 T-42     Short tasks in hours                  Alpha    in progress  0.5   today
 T-77     Board page render time                Alpha    todo         1.5   Fri 14 Nov
@@ -515,7 +522,7 @@ btid task ls [query] [order] [--fields a,b] [--json]
   query    projectId= assigneeId= status= priority= labels= text= tracked= blocked=
            group= (projectId|status|assigneeId|priority|label)
            updatedAt>=DAY  updatedAt<=DAY  endDate<=DAY
-  order    endDate | updatedAt | priority | title | id
+  order    endDate | updatedAt | priority | title | id     (comma for a composite, `-` for descending)
 
   $ btid task ls projectId=alpha status=todo due
 
