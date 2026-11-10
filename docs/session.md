@@ -8,6 +8,42 @@ signed in — the first of the three sign-in attempts in [`sign-in.md`](sign-in.
 
 ---
 
+## 0. The grammar
+
+Every verb is a **type**, a **verb**, and then its arguments:
+
+```
+btid <type> <verb> [query] [order] [--json]
+
+  type   task | project | person | store
+  verb   ls | show | new | edit | ...        (per type, below)
+```
+
+| type | reads | writes |
+| --- | --- | --- |
+| `task` | `ls`, `show`, `week`, `stats` | `new`, `edit`, `move`, `promote`, `step add\|done`, `comment`, `archive` |
+| `project` | `ls`, `show` | `new`, `edit`, `archive` |
+| `person` | `ls`, `show` | `new` (join), `edit` (role, active) |
+| `store` | `whoami` | `init` |
+
+Reads share one shape, which is the whole point of the standardisation:
+
+```
+btid task ls [query] [order] [--json]
+btid project ls [query] [order] [--json]
+btid person ls [query] [order] [--json]
+
+btid task show <id> [--json]
+btid project show <id> [--json]
+btid person show <login> [--json]
+```
+
+`[query]` is the app's own filter syntax; `[order]` is one bare word (`due`, `updated`, `priority`, `title`) — bare because
+query terms always carry an `=`, so the two cannot be confused, and neither needs quoting. `--json` prints the core's rows
+unchanged.
+
+Three verbs sit outside the table because they are not about one type: `btid whoami` (the session), `btid task week` and
+`btid task stats` (reports over tasks, which is what they are about).
 ## 1. Who am I, and where am I pointing
 
 Every command resolves the **actor** first, before it touches the store: the token proves *who GitHub says you are*
@@ -43,7 +79,7 @@ with a terminal tool is put it in a `for` loop.
 ## 2. What is on my plate
 
 ```
-$ btid ls --mine
+$ btid task ls --mine
 ID       TITLE                                 PROJECT  STATUS       DAYS  DUE
 T-42     Short tasks in hours                  Alpha    in progress  0.5   today
 T-77     Board page render time                Alpha    todo         1.5   Fri 14 Nov
@@ -54,7 +90,7 @@ The `DAYS` column is `estimateDays`, and a small task shows its hours-only booki
 `DUE` says what the board says: `today`, `Fri 14 Nov`, or `—` when nothing is promised.
 
 ```
-$ btid ls --project alpha --status done --since 2026-11-01
+$ btid task ls --project alpha --status done --since 2026-11-01
 ```
 
 Filters are the same words the app's filters use, because they are answered by the same query in `btid-core`. A flag
@@ -63,7 +99,7 @@ here that the app cannot express is a flag that will disagree with it.
 ## 3. One task, in full
 
 ```
-$ btid show T-42
+$ btid task show T-42
 T-42  Short tasks in hours                          Alpha · in progress · high
       owner chengyukpong · created 2026-11-09 by chengyukpong
       start 2026-11-11T09:00   end 2026-11-11T12:00   booked 3h of 8h
@@ -87,7 +123,7 @@ storage unit is mandays, and the terminal is a place to convert it back.
 ## 4. Moving a task — and the rule that proves the boundary
 
 ```
-$ btid edit T-42 --end 2026-11-14
+$ btid task edit T-42 --end 2026-11-14
 error: This task is tracked: moving its end date to a later day needs a reason.
 ```
 
@@ -95,7 +131,7 @@ This is the sentence the whole extraction was for. In the app it lived in a stor
 to ask. Here the command refuses on its own, and the CLI's only job is to have a way to pass the note:
 
 ```
-$ btid edit T-42 --end 2026-11-14 --note "the PM half moved to Friday"
+$ btid task edit T-42 --end 2026-11-14 --note "the PM half moved to Friday"
 edited T-42 · endDate 2026-11-11T12:00 → 2026-11-14T17:00 · 1 commit
 ```
 
@@ -109,13 +145,13 @@ and it would show that one commit with the note in it.
 ## 5. Work in progress, from the keyboard
 
 ```
-$ btid step add T-42 "The board draws a half day"
+$ btid task step add T-42 "The board draws a half day"
 step added · 3 of 4 · 1 commit
 
-$ btid step done T-42 4
+$ btid task step done T-42 4
 step 4 done · 4 of 4 · 1 commit
 
-$ btid comment T-42 "Half day drawn; the estimate reads 3h of an 8h day."
+$ btid task comment T-42 "Half day drawn; the estimate reads 3h of an 8h day."
 commented · 1 commit
 ```
 
@@ -125,24 +161,24 @@ undone in one.
 ## 6. Promotion, and what it costs
 
 ```
-$ btid promote T-91
+$ btid task promote T-91
 error: Before promotion: add a title, an owner, a start date, an end date, an estimate and a definition of done.
 ```
 
 The gate is the core's, in the core's words. The CLI does not count what is missing and it does not phrase the list.
 
 ```
-$ btid edit T-91 --assignee ivan --start 2026-11-17 --end 2026-11-19 --estimate 3 --dod "A stale write is refused, not lost."
+$ btid task edit T-91 --assignee ivan --start 2026-11-17 --end 2026-11-19 --estimate 3 --dod "A stale write is refused, not lost."
 edited T-91 · 4 fields → 1 commit
 
-$ btid promote T-91
+$ btid task promote T-91
 promoted T-91 · backlog → todo · 1 commit
 ```
 
 ## 7. The week, which is a query and not a command
 
 ```
-$ btid week
+$ btid task week
 Alpha
   T-42  Short tasks in hours    in progress   3h of 8h booked
   T-77  Board page render time  todo          1.5 md
@@ -200,7 +236,7 @@ was seeded by a script; a CLI handed a fresh store would walk straight into it.
 remember, and no moment at which a store exists without somebody able to administer it:
 
 ```
-$ btid init yuk-org/btid-store
+$ btid store init yuk-org/btid-store
 created yuk-org/btid-store at v1 · chengyukpong is its manager · 1 commit
 ```
 
@@ -255,7 +291,7 @@ created alpha-1 · backlog · 1 commit
 A new task is always `backlog` and belongs to a project; the id is minted (`<project>-<n>`) and never re-minted.
 
 ```
-$ btid promote alpha-1
+$ btid task promote alpha-1
 error: Before promotion: add a title, an owner, a start date, an end date, an estimate and a definition of done.
 ```
 
@@ -271,18 +307,18 @@ $ cat t1-fields.json
   "definitionOfDone": "task1 is visible on the board with a date and an owner."
 }
 
-$ btid edit alpha-1 --file t1-fields.json
+$ btid task edit alpha-1 --file t1-fields.json
 edited alpha-1 · 5 fields · 1 commit
 
-$ btid promote alpha-1
+$ btid task promote alpha-1
 promoted alpha-1 · backlog → todo · 1 commit
 ```
 
 ```
-$ btid edit alpha-1 --tracked
+$ btid task edit alpha-1 --tracked
 edited alpha-1 · tracked false → true · 1 commit
 
-$ btid move alpha-1 in-progress
+$ btid task move alpha-1 in-progress
 moved alpha-1 · todo → in progress · 1 commit
 ```
 
@@ -290,10 +326,10 @@ moved alpha-1 · todo → in progress · 1 commit
 rule. The status itself is just a field; nothing refuses this move.
 
 ```
-$ btid edit alpha-1 --end 2026-11-25
+$ btid task edit alpha-1 --end 2026-11-25
 error: This task is tracked: moving its end date to a later day needs a reason.
 
-$ btid edit alpha-1 --end 2026-11-25 --note "the client review moved a week"
+$ btid task edit alpha-1 --end 2026-11-25 --note "the client review moved a week"
 edited alpha-1 · endDate 2026-11-18T17:00 → 2026-11-25T17:00 · 1 commit
 ```
 
@@ -301,7 +337,7 @@ That pair is the boundary in one screen. The CLI did not decide that a note was 
 printed what came back.
 
 ```
-$ btid edit alpha-1 --progress 100
+$ btid task edit alpha-1 --progress 100
 edited alpha-1 · percentComplete 60 → 100 · 1 commit
 ```
 
@@ -309,7 +345,7 @@ Progress is not a move: it is a field, and finishing is a status. They are separ
 decisions.
 
 ```
-$ btid move alpha-1 done
+$ btid task move alpha-1 done
 moved alpha-1 · in progress → done · 1 commit
 ```
 
@@ -317,7 +353,7 @@ Nothing gates this one. The steps, if any are open, come back as a warning print
 the same thing, and a warning is not a refusal.
 
 ```
-$ btid show alpha-1
+$ btid task show alpha-1
 alpha-1  task1                                    Alpha · done · high
          owner chengyukpong · created 2026-11-11 by chengyukpong
          start 2026-11-11T09:00   end 2026-11-25T17:00   estimate 3 md
@@ -339,11 +375,11 @@ point of the split: `git log` of the store repository is the audit trail, and it
 Reading is the half of a tracker people use most, so it gets **one** shape rather than a flag per thought:
 
 ```
-$ btid ls                              # the whole store, grouped by project
-$ btid ls project=alpha                # one project
-$ btid ls owner=me status=todo         # narrow inside it
-$ btid ls due=overdue label=urgent     # the signals the board draws
-$ btid ls text=auth updated=week       # free text, and recency
+$ btid task ls                              # the whole store, grouped by project
+$ btid task ls project=alpha                # one project
+$ btid task ls owner=me status=todo         # narrow inside it
+$ btid task ls due=overdue label=urgent     # the signals the board draws
+$ btid task ls text=auth updated=week       # free text, and recency
 ```
 
 That is not a syntax invented for the terminal. `btid-core` already parses it — `readFilterQuery(text, lookups)` is what
@@ -355,7 +391,7 @@ a GitHub handle to a person id. They come from the rows just loaded, never from 
 with a project called `auth` and a person called `auth` is a question the core answers, not the CLI.
 
 ```
-$ btid ls project=alpha status=in-progress
+$ btid task ls project=alpha status=in-progress
 ID       TITLE                        OWNER          DUE         DAYS
 alpha-1  task1                        chengyukpong   Tue 25 Nov  3
 
@@ -369,28 +405,28 @@ store is nearly empty — the sentence says what was hidden, in the same words t
 
 | verb | the core it calls | answers |
 | --- | --- | --- |
-| `btid ls [query]` | `readFilterQuery` + `taskFilters` + `boardSort` | which tasks, in board order |
-| `btid show <id>` | one row | one task: fields, steps, comments, activity |
-| `btid stats [query]` | `summarise` | counts and mandays by status, priority, project |
-| `btid week [--weeks n]` | `weekActivity` | what closed or fell due this week, back `n` weeks |
-| `btid person <login>` | `personActivities` | what one person did, week by week |
+| `btid task ls [query]` | `readFilterQuery` + `taskFilters` + `boardSort` | which tasks, in board order |
+| `btid task show <id>` | one row | one task: fields, steps, comments, activity |
+| `btid task stats [query]` | `summarise` | counts and mandays by status, priority, project |
+| `btid task week [--weeks n]` | `weekActivity` | what closed or fell due this week, back `n` weeks |
+| `btid person show <login>` | `personActivities` | what one person did, week by week |
 | `btid project ls` / `show <id>` | project rows | the portfolio |
 | `btid people` | roster rows | who is on it, their role, active or not |
 | `btid whoami` | roster row for the token's login | who you are here, and what you may do |
 
 ```
-$ btid stats project=alpha
+$ btid task stats project=alpha
 Alpha                        6 tasks   2 done   3 in progress   1 todo
   mandays                    booked 11.5 / estimated 14          (1 short task booked in hours)
 
-$ btid week --weeks 3
+$ btid task week --weeks 3
               W44      W45      W46
 finished      2        1        0
 due           3        2        1
 ```
 
 ```
-$ btid person chengyukpong
+$ btid person show chengyukpong
 chengyukpong · manager · active
   this week   3 edits   1 comment   2 steps ticked   task1 finished
 ```
@@ -428,7 +464,7 @@ field is refused by the schema with the field named rather than by a flag parser
 Flags stay for the small edits (`--end`, `--note`, `--estimate`), because a `--file` for one field is worse than a flag.
 
 **Naming.** The binary is `btid`; a verb is one word (`ls`, `show`, `move`, `edit`, `promote`, `step`, `comment`,
-`week`, `whoami`). Two-word verbs are the exception (`step add`), and only where the noun is shared.
+`task`, `project`, `person`, `store`). Two-word verbs are the exception (`step add`), and only where the noun is shared.
 
 **The store is configuration, in that order:** `--store owner/repo@branch`, then `BTID_STORE`, then a config file at a
 documented path; no config is an error naming all three. Never a default repository — the transcript's second line of
