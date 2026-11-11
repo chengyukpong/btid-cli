@@ -203,6 +203,19 @@ Two values the store decides, not the flag:
   booking, and day dates are refused by the schema;
 - a **tracked** task's end day needs `--note`, and that is asked before the schema is reached.
 
+**A captured item becomes board work by promotion, not by a status flag.** Editing `--status todo` on a backlog row is refused —
+  the rule is `NOT_ALLOWED` with *"Promote the item to move it onto the board."* — and the verb that does it is:
+
+```console
+$ btid task promote alpha-b9z9              # lands in todo
+$ btid task promote alpha-b9z9 --status in_progress
+promoted  alpha-b9z9   in_progress   rev 1
+```
+
+The gate is the SPA's: a title, an owner, both dates, an estimate and a definition of done. Missing any of them is
+`PROMOTION_INCOMPLETE` with the sentence the card shows (*"Before promotion: add an estimate and a definition of done."*).
+Promoting twice is refused (`ALREADY_PROMOTED`) — after the first crossing, `task edit --status` is the way to move columns.
+
 **Give a project its window, or it cannot take work.** A task needs a project with both dates, so a project created without
 them refuses every capture with `PROJECT_NOT_READY` — deliberately, but a wall if you meet it afterwards. `project edit` is
 the way to add the window later, and it is the same command that renames or re-dates:

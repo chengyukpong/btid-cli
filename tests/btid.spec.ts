@@ -525,6 +525,72 @@ describe('btid', () => {
     assert.equal(ivan['role'], 'manager')
   })
 
+  it('promotes a backlog item onto the board, in one commit', async () => {
+    client.put('projects/alpha/tasks.json', {
+      'alpha-a1b2': task(),
+      'alpha-b9z9': task({
+        id: 'alpha-b9z9',
+        taskId: 'alpha-b9z9',
+        title: 'Backlog item',
+        status: 'backlog',
+        firstPromotedAt: null,
+        estimateDays: 2,
+        definitionOfDone: 'It works.',
+      }),
+    })
+    const code = await btid(['task', 'promote', 'alpha-b9z9'])
+    assert.equal(code, 0, lines.text)
+    assert.match(lines.text, /promoted {2}alpha-b9z9/)
+    assert.equal(client.messages.length, 1)
+    assert.equal(client.messages[0], 'promote alpha-b9z9')
+
+    const row = client.json('projects/alpha/tasks.json')['alpha-b9z9']!
+    assert.equal(row['status'], 'todo')
+    assert.ok(typeof row['firstPromotedAt'] === 'string', 'the crossing is recorded')
+  })
+
+  it('refuses to promote an item that is missing what the board needs, in the gate’s words', async () => {
+    client.put('projects/alpha/tasks.json', {
+      'alpha-a1b2': task(),
+      'alpha-m1ss': task({
+        id: 'alpha-m1ss',
+        taskId: 'alpha-m1ss',
+        title: 'Half a task',
+        status: 'backlog',
+        firstPromotedAt: null,
+        estimateDays: null,
+        definitionOfDone: '',
+      }),
+    })
+    const code = await btid(['task', 'promote', 'alpha-m1ss', '--json'])
+    assert.equal(code, 1)
+    const error = (lines.json[0] as { error: { code: string; message: string } }).error
+    assert.equal(error.code, 'PROMOTION_INCOMPLETE')
+    assert.match(error.message, /Before promotion: add/)
+    assert.equal(client.messages.length, 0, 'nothing committed')
+  })
+
+  it('refuses a promotion twice, and points at the status change instead', async () => {
+    client.put('projects/alpha/tasks.json', {
+      'alpha-a1b2': task(),
+      'alpha-b9z9': task({
+        id: 'alpha-b9z9',
+        taskId: 'alpha-b9z9',
+        title: 'Backlog item',
+        status: 'backlog',
+        firstPromotedAt: null,
+        estimateDays: 2,
+        definitionOfDone: 'It works.',
+      }),
+    })
+    assert.equal(await btid(['task', 'promote', 'alpha-b9z9']), 0)
+    lines.written.length = 0
+    const again = await btid(['task', 'promote', 'alpha-b9z9', '--json'])
+    assert.equal(again, 1)
+    const error = (lines.json[0] as { error: { code: string } }).error
+    assert.equal(error.code, 'ALREADY_PROMOTED')
+  })
+
   it('refuses a member adding a project, in the manager’s words', async () => {
     client.put('people.json', { ...{ [managerRow.id]: { ...managerRow, role: 'member' } } })
     const code = await btid(['project', 'new', 'beta', 'Beta'])

@@ -299,6 +299,34 @@ async function captureBatch(context: VerbContext, file: string): Promise<number>
   return 0
 }
 
+const taskPromote: Verb = {
+  name: 'task promote',
+  summary: 'Move a captured item onto the board. Needs a title, an owner, both dates, an estimate and a definition of done.',
+  usage: 'btid task promote <id> [--status todo|in_progress|done] [--json] [--dry-run]',
+  flags: { status: 'value', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid task promote <id>', context.out, context.json)
+
+    const statusText = stringFlag(context.flags, 'status')
+    if (statusText !== null && statusText !== 'todo' && statusText !== 'in_progress' && statusText !== 'done') {
+      return usage(`--status “${statusText}” is not one of todo, in_progress, done`, context.out, context.json)
+    }
+
+    const result =
+      statusText === null ? context.store.task(id).promote() : context.store.task(id).promote(statusText)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `promote ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`promoted  ${result.value.taskId}   ${result.value.status}   rev ${result.value.rev}`)
+    return 0
+  },
+}
+
 const taskEdit: Verb = {
   name: 'task edit',
   summary: 'Change a task, or a list of them from --file, in one commit.',
@@ -908,6 +936,7 @@ const version: Verb = {
 export const VERBS: readonly Verb[] = [
   taskLs,
   taskShow,
+  taskPromote,
   taskNew,
   taskEdit,
   projectLs,
