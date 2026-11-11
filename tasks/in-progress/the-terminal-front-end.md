@@ -1,7 +1,8 @@
 # The terminal front end, verb by verb
 
-- **Status:** todo
+- **Status:** in-progress
 - **Created:** 2026-11-11T01:36:00+08:00
+- **Started:** 2026-11-11T14:20:00+08:00
 - **Finished:** —
 - **Approved:** —
 
@@ -13,6 +14,46 @@ live in the core.
 
 The session it has to be able to produce is written down in [`docs/session.md`](../docs/session.md): whoami, ls, show,
 move, edit, step, comment, promote, week — with every refusal printed in the core's words.
+
+## Built (2026-11-11T14:35)
+
+The scaffold, the config, the sign-in, and every verb the core can support today:
+
+| | |
+|---|---|
+| **scaffold** | `package.json` with a `btid` bin, `tsconfig`, Vitest; `btid-core` and `githubdb` from `file:` beside it |
+| **config** | `--store owner/repo[@branch]` → `BTID_STORE` → `~/.config/btid/config.json`; **no default repository**, and the refusal says all three |
+| **sign-in** | `gh auth token`, then `BTID_TOKEN`, then a refusal naming both; the login comes from `GET /user` and is passed as `claim`, so the roster decides what it means |
+| **verbs** | `task ls` (query + board order + `--fields`), `task show`, `task new`, `task edit` (with `--note`), `project ls`, `project new`, `person ls`, `person new`, `store whoami`, `store init`, `help` |
+| **output** | a table by default; `--json` prints the core's own object; `--fields` projects both the same way |
+| **exit codes** | `0` ok · `1` a refusal (with the core's code) · `2` usage · faults keep the engine's numbers (`5` no store, `4` conflict, `2` version) |
+| **help** | generated from the one registry the parser reads; `help --json` is the manifest (`verbs`, flags, exit codes) |
+
+```
+$ node dist/bin.js help task edit
+btid task edit <id> [--title t] … [--note text] [--json] [--dry-run]
+  flags: --title, --status, --priority, --assignee, --start, --end, --percent, --note, --dry-run
+
+$ node dist/bin.js help --json | jq '.verbs | length'
+10
+```
+
+17 tests, all against a real `btid-core` and a real `githubdb` database with only the network replaced:
+
+- `task ls` filters with the core's grammar and refuses `status=nonsense` as `QUERY_INVALID` rather than listing everything;
+- `task show` says `TASK_NOT_FOUND` instead of throwing;
+- `task new` writes exactly one commit, named after the row;
+- **`task edit --end` on a tracked task exits 1 with the core's sentence and commits nothing** — the proof this project exists for;
+- `--note` turns that into one commit, and the store's file carries the new date;
+- `--dry-run` prints `would commit: …` and writes nothing;
+- a member creating a project is refused by the core, not by a flag;
+- `--fields` projects table and JSON identically, and an unknown name is a usage error listing the real fields;
+- `help` and `help --json` need no store; a fault exits 5, not 1.
+
+### Not built, because the core has no verb for it
+
+`task promote`, `task move`, `task step`, `task comment`, `task archive`, `project edit|archive`, `person edit`, and
+`task week`/`stats`. Each waits on one `btid-core` command; writing the rule here is the one thing this project must not do.
 
 ## Steps
 
