@@ -24,6 +24,11 @@ Nothing is re-implemented here. A verb is a thin parse of arguments, one call, a
 No browser relay, no GitHub App: a token from `gh auth token` when `gh` is signed in, otherwise a device flow so the CLI
 works on a machine that has never had `gh`. Either way the token stays local.
 
+## Driving it from an agent
+
+[`docs/operating.md`](docs/operating.md) is the hand-off: install, where the store is, the loop, what the exit codes mean,
+what an agent must not do — and `btid help --json`, the manifest it should read before its first call.
+
 ## Status
 
 **Seed.** Nothing is implemented yet. It is built after `btid-core`, deliberately: the core is what this project is a
