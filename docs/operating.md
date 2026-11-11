@@ -37,6 +37,9 @@ head — and either hydrates the rows it already has or loads the store afresh:
 | second read (snapshot) | head only | ~0.9 s |
 | a write | as before, then the snapshot is dropped | ~6 s |
 
+- The file is **gzipped above 2 KB** and plain JSON below it — gzip by magic bytes, not by a flag, so a snapshot written by an
+  older build still opens, and a small one stays readable with `cat`. A store is a tenth of its size on disk, which is what
+  `btid2` found for the same JSON.
 - `--fresh` ignores the snapshot for one call and writes a new one from a real load.
 - `BTID_NO_CACHE=1` turns it off for a session; `BTID_CACHE_DIR` moves it.
 - **A write drops the snapshot**, because after a commit those rows describe the store *before* it. The next command loads

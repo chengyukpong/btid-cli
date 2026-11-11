@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { decodeSnapshot, encodeSnapshot } from './snapshot-codec'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { StoreSnapshot } from 'btid-core'
@@ -50,9 +51,10 @@ export const snapshotPath = (
 export function readSnapshot(path: string, env: NodeJS.ProcessEnv = process.env): StoreSnapshot | null {
   if (!cacheEnabled(env) || !existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, 'utf8')) as StoreSnapshot
+    // gzipped or not, decided by the bytes: a file the previous build wrote still reads.
+    return decodeSnapshot(readFileSync(path)) as StoreSnapshot
   } catch {
-    // A half-written or hand-edited file is a miss, not an error: the cost of a miss is one load.
+    // A half-written, hand-edited or truncated file is a miss, not an error: the cost of a miss is one load.
     return null
   }
 }
@@ -67,7 +69,8 @@ export function writeSnapshot(path: string, snapshot: StoreSnapshot): void {
   try {
     mkdirSync(join(path, '..'), { recursive: true })
     const temp = `${path}.${process.pid}.tmp`
-    writeFileSync(temp, JSON.stringify(snapshot), 'utf8')
+    // Gzipped above a threshold, plain below it — see snapshot-codec.ts for why both are on purpose.
+    writeFileSync(temp, encodeSnapshot(snapshot))
     renameSync(temp, path)
   } catch {
     // Nothing to do: the next command pays for a load.
