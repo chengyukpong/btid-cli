@@ -15,9 +15,10 @@ btid-cli@0.1.0 -> C:\workspace\dsh\btid3\btid-cli
 
 Three consequences, all worth knowing before operating:
 
-- **A change to this checkout is a change to `btid`.** No reinstall needed; `npm run build` here is enough for the CLI's own
-  code, and `npm run build` in `btid-core` for anything the core owns (the CLI resolves it from the checkout's
-  `node_modules`, which points at the core's `dist`).
+- **A change to this checkout is a change to `btid`.** No reinstall and no rebuild needed for the CLI's own code — `btid` runs
+  this `dist/`. But the core arrives as a **published artifact**, `release/btid-core-0.2.0.tgz` (`file:` in
+  `package.json`), the same way `githubdb` does: after changing `btid-core`, bump its version, `npm pack` into `release/`,
+  repoint the CLI's dependency and reinstall. That is the distribution being exercised rather than assumed.
 - **Moving or deleting the checkout breaks the command.** `npm uninstall -g btid-cli` and reinstall from the new location.
 - **The name was taken.** The previous product, `btid@0.4.0` (the local-app tracker, superseded by `btid2`), was installed
   globally under the same command. It has been uninstalled, and reinstalling it later would take the name back.
