@@ -27,12 +27,37 @@ works on a machine that has never had `gh`. Either way the token stays local.
 ## Driving it from an agent
 
 [`docs/operating.md`](docs/operating.md) is the hand-off: install, where the store is, the loop, what the exit codes mean,
-what an agent must not do — and `btid help --json`, the manifest it should read before its first call.
+what an agent must not do — and the manifest it should read before its first call.
+
+### The field names
+
+There is no hand-kept list: the fields are read off `btid-core`'s own zod schemas by `toJSONSchema()` and published, so
+`--fields` is checkable before the call rather than by failing it.
+
+```console
+$ btid help --json | jq '.types[] | "\(.type): \(.fields | length) fields"'
+task: 29 fields
+project: 13 fields
+person: 6 fields
+
+$ btid help --json | jq '.types[0].fields[] | select(.name == "status")'
+{"name":"status","type":"string","required":true,"values":["backlog","todo","in_progress","done"]}
+
+$ btid help task            # the same list, for a person to read
+task fields (29), as the store validates them:
+  id                string      required
+  …
+  status            string      required  one of: backlog, todo, in_progress, done
+```
+
+A field the store starts validating is a field this CLI can name the day it lands — there is no third place to update.
 
 ## Status
 
-**Seed.** Nothing is implemented yet. It is built after `btid-core`, deliberately: the core is what this project is a
-proof of, so it has to exist first.
+**The verbs the core can support are built.** `task ls|show|new|edit`, `project ls|new`, `person ls|new`,
+`store whoami|init`, `help` — 19 tests against a real `btid-core` and a real `githubdb` database with only the network
+replaced. `promote`, `move`, `step`, `comment` and `archive` wait on one core command each; writing the rule here is the
+one thing this project must not do.
 
 ## What it is not
 
@@ -45,8 +70,9 @@ If you are a model using this CLI rather than a person reading about it, do not 
 prose goes stale. Ask the binary:
 
 ```
-$ btid help --json        # every type, verb, argument, input schema, query key and exit code
-$ btid help task ls       # the same facts for one verb, as a page
+$ btid help --json        # every verb, its flags, the row fields, and the exit codes
+$ btid help task          # one type's fields, as a page
+$ btid help task ls       # one verb's usage and flags
 ```
 
 Then the loop, which never needs English:
