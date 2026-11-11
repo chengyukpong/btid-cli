@@ -312,6 +312,123 @@ describe('btid', () => {
     assert.equal(client.messages.length, 0)
   })
 
+  it('edits every field the row lets a person change', async () => {
+    const code = await btid([
+      'task', 'edit', 'alpha-a1b2',
+      '--title', 'Renamed',
+      '--description', 'A better one.',
+      '--dod', 'Both columns line up.',
+      '--estimate', '3',
+      '--percent', '25',
+      '--tracked', 'off',
+      '--blocked', 'on',
+      '--blocked-reason', 'Waiting for the header',
+      '--blocked-by', 'alpha-c3d4',
+      '--labels', 'ui,billing',
+      '--start', '2026-11-10',
+      '--end', '2026-11-20',
+      '--priority', 'urgent',
+      '--status', 'in_progress',
+      '--note', 'Everything at once.',
+    ])
+    assert.equal(code, 0, lines.text)
+    const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
+    assert.equal(row['title'], 'Renamed')
+    assert.equal(row['description'], 'A better one.')
+    assert.equal(row['definitionOfDone'], 'Both columns line up.')
+    assert.equal(row['estimateDays'], 3)
+    assert.equal(row['percentComplete'], 25)
+    assert.equal(row['tracked'], false)
+    assert.equal(row['blocked'], true)
+    assert.equal(row['blockedReason'], 'Waiting for the header')
+    assert.deepEqual(row['blockedBy'], ['alpha-c3d4'])
+    assert.deepEqual(row['labels'], ['ui', 'billing'])
+    assert.equal(row['startDate'], '2026-11-10')
+    assert.equal(row['endDate'], '2026-11-20')
+    assert.equal(row['priority'], 'urgent')
+    assert.equal(row['status'], 'in_progress')
+  })
+
+  it('books a short task in hours, which is the only shape the store accepts', async () => {
+    const code = await btid([
+      'task', 'edit', 'alpha-a1b2',
+      '--small', 'on',
+      '--start', '2026-11-10T09:00',
+      '--end', '2026-11-10T13:00',
+      '--estimate', 'none',
+      '--note', 'Booked in hours.',
+    ])
+    assert.equal(code, 0, lines.text)
+    const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
+    assert.equal(row['isSmall'], true)
+    assert.equal(row['startDate'], '2026-11-10T09:00')
+    assert.equal(row['endDate'], '2026-11-10T13:00')
+  })
+
+  it('lets the store refuse a short task with day dates, as a fault rather than a rule', async () => {
+    const code = await btid([
+      'task', 'edit', 'alpha-a1b2',
+      '--small', 'on',
+      '--start', '2026-11-10',
+      '--end', '2026-11-20',
+      '--note', 'Trying to book a day as a short task.',
+    ])
+    assert.equal(code, 3, 'a schema refusal is a fault: exit 3, like the engine')
+    assert.match(lines.text, /INVALID_ROW|not valid v1 data/)
+  })
+
+  it('clears nullable fields with none', async () => {
+    const code = await btid(['task', 'edit', 'alpha-a1b2', '--estimate', 'none', '--labels', 'none', '--blocked-by', 'none'])
+    assert.equal(code, 0, lines.text)
+    const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
+    assert.equal(row['estimateDays'], null)
+    assert.deepEqual(row['labels'], [])
+    assert.deepEqual(row['blockedBy'], [])
+  })
+
+  it('refuses a flag the verb does not take, instead of ignoring it', async () => {
+    const code = await btid(['task', 'edit', 'alpha-a1b2', '--estimatee', '3'])
+    assert.equal(code, 2)
+    assert.match(lines.text, /task edit does not take --estimatee/)
+    assert.match(lines.text, /--estimate/)
+  })
+
+  it('answers --help on a verb without touching the store', async () => {
+    const code = await btid(['task', 'edit', '--help'])
+    assert.equal(code, 0)
+    assert.match(lines.text, /btid task edit <id>/)
+    assert.equal(client.messages.length, 0)
+  })
+
+  it('edits a project’s colour, members and labels', async () => {
+    const code = await btid([
+      'project', 'edit', 'alpha',
+      '--color', '#FF8800',
+      '--members', 'ivan',
+      '--labels', 'ui,infra',
+    ])
+    assert.equal(code, 0, lines.text)
+    const project = client.json('projects/alpha/project.json')['alpha']!
+    assert.equal(project['color'], '#FF8800')
+    assert.deepEqual(project['members'], ['ivan'])
+    assert.deepEqual(project['labels'], ['ui', 'infra'])
+  })
+
+  it('edits a person: name, handle, role, active', async () => {
+    client.put('people.json', {
+      chengyukpong: managerRow,
+      ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
+    })
+    const code = await btid(['person', 'edit', 'ivan', '--name', 'Ivan Ivanovich', '--handle', 'ivan-dev', '--role', 'manager', '--active', 'off'])
+    assert.equal(code, 0, lines.text)
+    const roster = client.json('people.json')['ivan']!
+    assert.equal(roster['displayName'], 'Ivan Ivanovich')
+    assert.equal(roster['githubHandle'], 'ivan-dev')
+    assert.equal(roster['role'], 'manager')
+    assert.equal(roster['active'], false)
+    assert.equal(roster['id'], 'ivan', 'the id is not re-slugged')
+  })
+
   it('refuses a member adding a project, in the manager’s words', async () => {
     client.put('people.json', { ...{ [managerRow.id]: { ...managerRow, role: 'member' } } })
     const code = await btid(['project', 'new', 'beta', 'Beta'])

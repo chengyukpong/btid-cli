@@ -143,6 +143,28 @@ $ btid task new --file tasks.json --json
 A missing *key* is a usage error (`2`): that is the terminal's shape. A present key with a bad *value* is the store's
 refusal (`1`) in the store's words — `TITLE_REQUIRED`, `PROJECT_MISSING`, `PERSON_EXISTS`.
 
+### Every editable field has a flag
+
+Nothing is settable only by editing JSON. The three `edit` verbs cover the three rows:
+
+| verb | flags |
+|---|---|
+| `task edit` | `--title --description --dod --status --priority --assignee --start --end --percent --estimate --tracked --small --blocked --blocked-reason --blocked-by --labels` (+ `--note` for a tracked end-day move) |
+| `project edit` | `--name --start --end --description --status --color --members --labels` |
+| `person edit` | `--name --handle --role --active` |
+
+`none` clears a nullable field (`--estimate none`, `--labels none`, `--start none`). On/off flags take `on` or `off` — a bare
+flag cannot say whether you meant to set or clear.
+
+**An unknown flag is refused (exit 2), naming what the verb does take.** A typo used to be ignored, which read as "needs at
+least one field to change" — the wrong sentence for the wrong problem.
+
+Two values the store decides, not the flag:
+
+- a **short task** (`--small on`) books clock times: `--start 2026-11-10T09:00 --end 2026-11-10T13:00` is a four-hour
+  booking, and day dates are refused by the schema;
+- a **tracked** task's end day needs `--note`, and that is asked before the schema is reached.
+
 **Give a project its window, or it cannot take work.** A task needs a project with both dates, so a project created without
 them refuses every capture with `PROJECT_NOT_READY` — deliberately, but a wall if you meet it afterwards. `project edit` is
 the way to add the window later, and it is the same command that renames or re-dates:

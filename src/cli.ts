@@ -109,6 +109,26 @@ export async function run(options: RunOptions): Promise<number> {
     return args.length === 0 ? 0 : 2
   }
 
+  // A flag the verb does not declare is a mistake, not something to ignore: silently dropping it is how a typo becomes
+  // "needs at least one field to change", which is the wrong sentence for the wrong problem.
+  const global = new Set(['store', 'json', 'help', 'v', 'version'])
+  const declared = new Set([...Object.keys(verb.flags ?? {}), ...global])
+  const unknownFlags = Object.keys(flags).filter((flag) => !declared.has(flag))
+  if (unknownFlags.length > 0) {
+    const known = Object.keys(verb.flags ?? {}).filter((flag) => !global.has(flag))
+    const names = unknownFlags.map((flag) => `--${flag}`).join(', ')
+    out.line(
+      `usage: ${verb.name} does not take ${names}. It takes ${known.length === 0 ? 'no flags' : known.map((flag) => `--${flag}`).join(', ')}.`,
+    )
+    return 2
+  }
+
+  // `--help` on any verb is its usage line, and nothing else happens.
+  if (flags['help'] === true) {
+    out.line(verb.usage)
+    return 0
+  }
+
   // `help` and `version` answer questions about the binary, so neither requires a store.
   if (verb.name === 'help' || verb.name === 'version') {
     try {
