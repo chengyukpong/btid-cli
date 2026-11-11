@@ -83,7 +83,7 @@ init` on the same repository is refused — a store's version is not something t
 ## 4. The loop an agent actually runs
 
 ```console
-$ btid project new alpha "Alpha One"                       # key normalised: Alpha → alpha
+$ btid project new alpha "Alpha One" --start 2026-10-26 --end 2026-11-23   # key normalised: Alpha → alpha
 $ btid task new --project alpha --title "Check the header budgets"
 captured  alpha-n0qz   backlog   Check the header budgets
 
@@ -94,6 +94,18 @@ $ btid task edit alpha-n0qz --end 2026-11-20 --note "Client moved the review."
 
 Every write is **one commit**, named after the verb and the row (`capture alpha-n0qz`, `edit alpha-n0qz`). There is no
 autosave and no batch: a verb that succeeds has already written, and a verb that refuses has written nothing.
+
+**Give a project its window, or it cannot take work.** A task needs a project with both dates, so a project created without
+them refuses every capture with `PROJECT_NOT_READY` — deliberately, but a wall if you meet it afterwards. `project edit` is
+the way to add the window later, and it is the same command that renames or re-dates:
+
+```console
+$ btid project edit alpha --start 2026-10-26 --end 2026-11-23
+edited  alpha   Alpha One
+
+$ btid project edit alpha --end 2026-10-01
+refused: A project cannot end (2026-10-01) before it starts (2026-10-26). (PROJECT_WINDOW_INVALID)
+```
 
 Use `--dry-run` to check a write without committing it:
 
