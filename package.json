@@ -18,7 +18,7 @@
     "prepare": "npm run build"
   },
   "dependencies": {
-    "btid-core": "file:../btid-core/release/btid-core-0.2.0.tgz",
+    "btid-core": "file:../btid-core/release/btid-core-0.3.0.tgz",
     "githubdb": "file:../githubdb/release/githubdb-2.1.0.tgz"
   },
   "devDependencies": {

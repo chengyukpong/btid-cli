@@ -249,22 +249,82 @@ const projectLs: Verb = {
 
 const projectNew: Verb = {
   name: 'project new',
-  summary: 'Start a project. The manager’s act.',
-  usage: 'btid project new <key> <name> [--json] [--dry-run]',
-  flags: { 'dry-run': 'boolean' },
+  summary: 'Start a project. The manager’s act. Give it a window and it can take work at once.',
+  usage:
+    'btid project new <key> <name> [--start day] [--end day] [--description text] [--json] [--dry-run]',
+  flags: { start: 'value', end: 'value', description: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const [key, ...rest] = context.args
     if (key === undefined || rest.length === 0) return usage('btid project new <key> <name>', context.out, context.json)
     const name = rest.join(' ')
 
-    const result = context.store.createProject({ id: key, name })
+    const start = stringFlag(context.flags, 'start')
+    const end = stringFlag(context.flags, 'end')
+    const description = stringFlag(context.flags, 'description')
+    const result = context.store.createProject({
+      id: key,
+      name,
+      ...(start === null ? {} : { startDate: start }),
+      ...(end === null ? {} : { endDate: end }),
+      ...(description === null ? {} : { description }),
+    })
     if (!result.ok) return refusal(result, context.out, context.json)
 
     const committed = await commit(context, `project ${result.value.id}`)
     if (committed !== null && committed !== 0) return committed
     if (context.json) context.out.json(result.value.row)
     else context.out.line(`project  ${result.value.id}   ${result.value.row?.name ?? name}`)
+    return 0
+  },
+}
+
+const projectEdit: Verb = {
+  name: 'project edit',
+  summary: 'Change a project: its name, its window, its description. The manager’s act.',
+  usage:
+    'btid project edit <id> [--name text] [--start day] [--end day] [--description text] [--status active|archived] [--json] [--dry-run]',
+  flags: {
+    name: 'value',
+    start: 'value',
+    end: 'value',
+    description: 'value',
+    status: 'value',
+    'dry-run': 'boolean',
+  },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
+
+    const patch: Record<string, unknown> = {}
+    const name = stringFlag(context.flags, 'name')
+    if (name !== null) patch['name'] = name
+    const description = stringFlag(context.flags, 'description')
+    if (description !== null) patch['description'] = description
+    const start = stringFlag(context.flags, 'start')
+    if (start !== null) patch['startDate'] = start
+    const end = stringFlag(context.flags, 'end')
+    if (end !== null) patch['endDate'] = end
+    const statusText = stringFlag(context.flags, 'status')
+    if (statusText !== null) {
+      if (statusText !== 'active' && statusText !== 'archived') {
+        return usage(`--status “${statusText}” is not one of active, archived`, context.out, context.json)
+      }
+      patch['status'] = statusText
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return usage('btid project edit needs at least one field to change', context.out, context.json)
+    }
+
+    const result = context.store.project(id).update(patch as Parameters<ReturnType<Store['project']>['update']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `project edit ${id}`)
+    if (committed !== null && committed !== 0) return committed
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`edited  ${result.value.id}   ${result.value.name}`)
     return 0
   },
 }
@@ -386,6 +446,7 @@ export const VERBS: readonly Verb[] = [
   taskEdit,
   projectLs,
   projectNew,
+  projectEdit,
   personLs,
   personNew,
   storeWhoami,

@@ -164,6 +164,41 @@ describe('btid', () => {
     assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['title'], 'Write the failing test')
   })
 
+  it('creates a project with a window, so the very next capture works', async () => {
+    const code = await btid(['project', 'new', 'beta', 'Beta Two', '--start', '2026-11-02', '--end', '2026-11-30'])
+    assert.equal(code, 0)
+    assert.equal(client.json('projects/beta/project.json')['beta']!['startDate'], '2026-11-02')
+
+    lines.written.length = 0
+    const captured = await btid(['task', 'new', '--project', 'beta', '--title', 'First work'])
+    assert.equal(captured, 0)
+    assert.match(lines.text, /captured {2}beta-/)
+  })
+
+  it('refuses a window that ends before it starts, with the core’s sentence', async () => {
+    const code = await btid(['project', 'new', 'beta', 'Beta', '--start', '2026-11-30', '--end', '2026-11-02'])
+    assert.equal(code, 1)
+    assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
+    assert.match(lines.text, /cannot end \(2026-11-02\) before it starts/)
+    assert.equal(client.messages.length, 0)
+  })
+
+  it('gives an existing project its window with project edit, in one commit', async () => {
+    const code = await btid(['project', 'edit', 'alpha', '--start', '2026-11-02', '--end', '2026-11-30'])
+    assert.equal(code, 0)
+    assert.equal(client.messages.length, 1)
+    assert.match(client.messages[0]!, /^project edit alpha/)
+    const project = client.json('projects/alpha/project.json')['alpha']!
+    assert.equal(project['startDate'], '2026-11-02')
+    assert.equal(project['endDate'], '2026-11-30')
+  })
+
+  it('says a project is gone instead of throwing', async () => {
+    const code = await btid(['project', 'edit', 'nope', '--name', 'Anything'])
+    assert.equal(code, 1)
+    assert.match(lines.text, /PROJECT_NOT_FOUND/)
+  })
+
   it('refuses a member adding a project, in the manager’s words', async () => {
     client.put('people.json', { ...{ [managerRow.id]: { ...managerRow, role: 'member' } } })
     const code = await btid(['project', 'new', 'beta', 'Beta'])
