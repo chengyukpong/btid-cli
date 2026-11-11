@@ -51,11 +51,17 @@ export interface Verb {
 }
 
 /** Print a refusal and return the exit code. The sentence is the core's; this only chooses the number. */
-export function refusal<T>(result: CommandResult<T>, out: Output, json: boolean): number {
+export function refusal<T>(
+  result: CommandResult<T>,
+  out: Output,
+  json: boolean,
+  options: { index?: boolean } = {},
+): number {
   if (result.ok) return 0
   // A batch refusal carries `at`, and it is printed the way a person reads a list — "item 2" — because the alternative is
-  // somebody bisecting a JSON file to find which line the store objected to.
-  const at = (result as { at?: number }).at
+  // somebody bisecting a JSON file to find which line the store objected to. A one-item edit is not a list, so the caller can
+  // ask for the sentence alone.
+  const at = options.index === false ? undefined : (result as { at?: number }).at
   if (json) {
     out.json({
       error: {

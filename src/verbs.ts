@@ -77,6 +77,54 @@ const taskColumns: readonly Column<Task>[] = [
   { title: 'TITLE', value: (row) => row.title },
 ]
 
+/** One change, as both a flag-driven verb and a `--file` item produce it. */
+interface EditItem {
+  id: string
+  patch: Record<string, unknown>
+  note?: string
+}
+
+/**
+ * The `--file` shape for an edit: the core's own input, one per line.
+ *
+ * `{"id": "alpha-a1b2", "patch": {"endDate": "2026-11-20"}, "note": "Client moved it."}`
+ *
+ * It is deliberately the command's input rather than a second dialect: the same object `store.updateTasks` takes, so a file
+ * is a list of calls, not a schema of its own.
+ */
+function readEdits(context: VerbContext, file: string): { items: EditItem[] } | { message: string } {
+  let items: BatchItem[]
+  try {
+    items = readBatch(file)
+  } catch (error) {
+    return { message: error instanceof Error ? error.message : String(error) }
+  }
+
+  const edits: EditItem[] = []
+  for (const [index, item] of items.entries()) {
+    const at = index + 1
+    if (!has(item, 'id')) return { message: `item ${at} has no id.` }
+    const id = String(item['id'] ?? '')
+    const patch = item['patch']
+    if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+      return { message: `item ${at} has no "patch" object.` }
+    }
+    const note = textOf(item, 'note')
+    edits.push({ id, patch: patch as Record<string, unknown>, ...(note === null ? {} : { note }) })
+  }
+  return { items: edits }
+}
+
+/** `edit <id>` for one, `edit 3 tasks` for several: the commit message a batch deserves. */
+const editMessage = (items: readonly EditItem[], noun: string, prefix = 'edit'): string =>
+  items.length === 1 ? `${prefix} ${items[0]!.id}` : `${prefix} ${items.length} ${noun}`
+
+/** The `--note` flag, if there is one: the one field an edit takes outside its patch. */
+const noteOf = (context: VerbContext): { note?: string } => {
+  const note = stringFlag(context.flags, 'note')
+  return note === null ? {} : { note }
+}
+
 const taskLs: Verb = {
   name: 'task ls',
   summary: 'List tasks, optionally filtered by a query.',
@@ -253,9 +301,9 @@ async function captureBatch(context: VerbContext, file: string): Promise<number>
 
 const taskEdit: Verb = {
   name: 'task edit',
-  summary: 'Change a task. A tracked end day needs --note.',
+  summary: 'Change a task, or a list of them from --file, in one commit.',
   usage:
-    'btid task edit <id> [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
+    'btid task edit (<id> [fields] | --file <path|->) [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
   flags: {
     title: 'value',
     description: 'value',
@@ -274,105 +322,122 @@ const taskEdit: Verb = {
     'blocked-by': 'value',
     labels: 'value',
     note: 'value',
+    file: 'value',
     'dry-run': 'boolean',
   },
   writes: true,
   async run(context) {
-    const id = context.args[0]
-    if (id === undefined) return usage('btid task edit <id>', context.out, context.json)
+    const file = stringFlag(context.flags, 'file')
+    let items: EditItem[]
 
-    const patch: Record<string, unknown> = {}
-    const title = stringFlag(context.flags, 'title')
-    if (title !== null) patch['title'] = title
-    const statusText = stringFlag(context.flags, 'status')
-    if (statusText !== null) {
-      const status = statusOf(statusText)
-      if (status === null) return usage(`--status “${statusText}” is not one of backlog, todo, in_progress, done`, context.out, context.json)
-      patch['status'] = status
-    }
-    const priorityText = stringFlag(context.flags, 'priority')
-    if (priorityText !== null) {
-      const priority = priorityOf(priorityText)
-      if (priority === null) return usage(`--priority “${priorityText}” is not one of low, medium, high, urgent`, context.out, context.json)
-      patch['priority'] = priority
-    }
-    const assignee = stringFlag(context.flags, 'assignee')
-    if (assignee !== null) patch['assigneeId'] = assignee === 'none' ? null : assignee
-    const start = stringFlag(context.flags, 'start')
-    if (start !== null) patch['startDate'] = start
-    const end = stringFlag(context.flags, 'end')
-    if (end !== null) patch['endDate'] = end
-    const percent = stringFlag(context.flags, 'percent')
-    if (percent !== null) {
-      const value = Number(percent)
-      if (!Number.isInteger(value) || value < 0 || value > 100) {
-        return usage(`--percent “${percent}” is not a whole number between 0 and 100`, context.out, context.json)
+    if (file !== null) {
+      const read = readEdits(context, file)
+      if ('message' in read) return usage(read.message, context.out, context.json)
+      items = read.items
+    } else {
+      const id = context.args[0]
+      if (id === undefined) return usage('btid task edit <id>', context.out, context.json)
+      const built = taskPatchFromFlags(context)
+      if ('message' in built) return usage(built.message, context.out, context.json)
+      if (Object.keys(built.patch).length === 0) {
+        return usage(
+          `btid task edit needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {})
+            .filter((flag) => flag !== 'dry-run' && flag !== 'note' && flag !== 'file')
+            .map((flag) => `--${flag}`)
+            .join(', ')}.`,
+          context.out,
+          context.json,
+        )
       }
-      patch['percentComplete'] = value
+      items = [{ id, patch: built.patch, ...noteOf(context) }]
     }
 
-    // The estimate is a number of days, or `none` to clear it. It is how a task is booked, so it belongs on the verb that
-    // changes everything else about the row.
-    const estimate = stringFlag(context.flags, 'estimate')
-    if (estimate !== null) {
-      if (estimate === 'none') patch['estimateDays'] = null
-      else {
-        const value = Number(estimate)
-        if (!Number.isInteger(value) || value < 0) {
-          return usage(`--estimate “${estimate}” is not a whole number of days, or none`, context.out, context.json)
-        }
-        patch['estimateDays'] = value
-      }
-    }
+    // One call either way: a single edit is a one-item batch, so there is one code path and one commit per command.
+    const result = context.store.updateTasks(items as Parameters<Store['updateTasks']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
 
-    const description = stringFlag(context.flags, 'description')
-    if (description !== null) patch['description'] = description === 'none' ? '' : description
-    const dod = stringFlag(context.flags, 'dod')
-    if (dod !== null) patch['definitionOfDone'] = dod === 'none' ? '' : dod
-    const labels = stringFlag(context.flags, 'labels')
-    if (labels !== null) {
-      patch['labels'] = labels === 'none' ? [] : labels.split(',').map((label) => label.trim()).filter((label) => label !== '')
-    }
-
-    // Three booleans the row owns. `on`/`off` rather than a bare flag, because "clear the block reason" and "set tracked"
-    // are different intents, and a bare `--blocked` cannot say which it meant.
-    for (const [flag, field] of [
-      ['tracked', 'tracked'],
-      ['small', 'isSmall'],
-      ['blocked', 'blocked'],
-    ] as const) {
-      const value = booleanFlag(context.flags, flag)
-      if (value === undefined) return usage(`--${flag} takes on or off`, context.out, context.json)
-      if (value !== null) patch[field] = value
-    }
-    const blockedReason = stringFlag(context.flags, 'blocked-reason')
-    if (blockedReason !== null) patch['blockedReason'] = blockedReason === 'none' ? '' : blockedReason
-    const blockedBy = stringFlag(context.flags, 'blocked-by')
-    if (blockedBy !== null) {
-      patch['blockedBy'] = blockedBy === 'none' ? [] : listOf(blockedBy)
-    }
-
-    if (Object.keys(patch).length === 0) {
-      return usage(
-        `btid task edit needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {}).filter((flag) => flag !== 'dry-run' && flag !== 'note').map((flag) => `--${flag}`).join(', ')}.`,
-        context.out,
-        context.json,
-      )
-    }
-
-    const note = stringFlag(context.flags, 'note')
-    const result = context.store
-      .task(id)
-      .update(patch as Parameters<TaskHandle['update']>[0], note === null ? {} : { note })
-    if (!result.ok) return refusal(result, context.out, context.json)
-
-    const committed = await commit(context, `edit ${id}`)
+    const rows = result.value.map((handle) => handle.row!)
+    const committed = await commit(context, editMessage(items, 'tasks'))
     if (committed !== null && committed !== 0) return committed
-    if (context.json) context.out.json(result.value)
-    else context.out.line(`edited  ${result.value.taskId}   rev ${result.value.rev}`)
+
+    if (context.json) context.out.json(rows)
+    else for (const row of rows) context.out.line(`edited  ${row.taskId}   rev ${row.rev}`)
     return 0
   },
 }
+
+/** The flags of `task edit`, as an update patch. Shared by the single form; a file speaks the core's input directly. */
+function taskPatchFromFlags(context: VerbContext): { patch: Record<string, unknown> } | { message: string } {
+  const patch: Record<string, unknown> = {}
+  const title = stringFlag(context.flags, 'title')
+  if (title !== null) patch['title'] = title
+  const statusText = stringFlag(context.flags, 'status')
+  if (statusText !== null) {
+    const status = statusOf(statusText)
+    if (status === null) return { message: `--status “${statusText}” is not one of backlog, todo, in_progress, done` }
+    patch['status'] = status
+  }
+  const priorityText = stringFlag(context.flags, 'priority')
+  if (priorityText !== null) {
+    const priority = priorityOf(priorityText)
+    if (priority === null) return { message: `--priority “${priorityText}” is not one of low, medium, high, urgent` }
+    patch['priority'] = priority
+  }
+  const assignee = stringFlag(context.flags, 'assignee')
+  if (assignee !== null) patch['assigneeId'] = assignee === 'none' ? null : assignee
+  const start = stringFlag(context.flags, 'start')
+  if (start !== null) patch['startDate'] = start
+  const end = stringFlag(context.flags, 'end')
+  if (end !== null) patch['endDate'] = end
+  const percent = stringFlag(context.flags, 'percent')
+  if (percent !== null) {
+    const value = Number(percent)
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      return { message: `--percent “${percent}” is not a whole number between 0 and 100` }
+    }
+    patch['percentComplete'] = value
+  }
+
+  // The estimate is a number of days, or `none` to clear it. It is how a task is booked, so it belongs on the verb that
+  // changes everything else about the row.
+  const estimate = stringFlag(context.flags, 'estimate')
+  if (estimate !== null) {
+    if (estimate === 'none') patch['estimateDays'] = null
+    else {
+      const value = Number(estimate)
+      if (!Number.isInteger(value) || value < 0) {
+        return { message: `--estimate “${estimate}” is not a whole number of days, or none` }
+      }
+      patch['estimateDays'] = value
+    }
+  }
+
+  const description = stringFlag(context.flags, 'description')
+  if (description !== null) patch['description'] = description === 'none' ? '' : description
+  const dod = stringFlag(context.flags, 'dod')
+  if (dod !== null) patch['definitionOfDone'] = dod === 'none' ? '' : dod
+  const labels = stringFlag(context.flags, 'labels')
+  if (labels !== null) patch['labels'] = labels === 'none' ? [] : listOf(labels)
+  const blockedBy = stringFlag(context.flags, 'blocked-by')
+  if (blockedBy !== null) patch['blockedBy'] = blockedBy === 'none' ? [] : listOf(blockedBy)
+  const blockedReason = stringFlag(context.flags, 'blocked-reason')
+  if (blockedReason !== null) patch['blockedReason'] = blockedReason === 'none' ? '' : blockedReason
+
+  // Three booleans the row owns. `on`/`off` rather than a bare flag, because "clear the block reason" and "set tracked" are
+  // different intents, and a bare `--blocked` cannot say which it meant.
+  for (const [flag, field] of [
+    ['tracked', 'tracked'],
+    ['small', 'isSmall'],
+    ['blocked', 'blocked'],
+  ] as const) {
+    const value = booleanFlag(context.flags, flag)
+    if (value === undefined) return { message: `--${flag} takes on or off` }
+    if (value !== null) patch[field] = value
+  }
+
+  return { patch }
+}
+
 
 // --- project ------------------------------------------------------------------------
 
@@ -485,9 +550,9 @@ async function startBatch(context: VerbContext, file: string): Promise<number> {
 
 const projectEdit: Verb = {
   name: 'project edit',
-  summary: 'Change a project: its name, its window, its description. The manager’s act.',
+  summary: 'Change a project, or a list of them from --file, in one commit. The manager’s act.',
   usage:
-    'btid project edit <id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
+    'btid project edit (<id> [fields] | --file <path|->) [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
   flags: {
     name: 'value',
     start: 'value',
@@ -497,50 +562,69 @@ const projectEdit: Verb = {
     color: 'value',
     members: 'value',
     labels: 'value',
+    file: 'value',
     'dry-run': 'boolean',
   },
   writes: true,
   async run(context) {
-    const id = context.args[0]
-    if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
+    const file = stringFlag(context.flags, 'file')
+    let items: EditItem[]
 
-    const patch: Record<string, unknown> = {}
-    const name = stringFlag(context.flags, 'name')
-    if (name !== null) patch['name'] = name
-    const description = stringFlag(context.flags, 'description')
-    if (description !== null) patch['description'] = description
-    const start = stringFlag(context.flags, 'start')
-    if (start !== null) patch['startDate'] = start === 'none' ? null : start
-    const end = stringFlag(context.flags, 'end')
-    if (end !== null) patch['endDate'] = end === 'none' ? null : end
-    const color = stringFlag(context.flags, 'color')
-    if (color !== null) patch['color'] = color
-    const members = stringFlag(context.flags, 'members')
-    if (members !== null) patch['members'] = members === 'none' ? [] : listOf(members)
-    const labels = stringFlag(context.flags, 'labels')
-    if (labels !== null) patch['labels'] = labels === 'none' ? [] : listOf(labels)
-    const statusText = stringFlag(context.flags, 'status')
-    if (statusText !== null) {
-      if (statusText !== 'active' && statusText !== 'archived') {
-        return usage(`--status “${statusText}” is not one of active, archived`, context.out, context.json)
+    if (file !== null) {
+      const read = readEdits(context, file)
+      if ('message' in read) return usage(read.message, context.out, context.json)
+      items = read.items
+    } else {
+      const id = context.args[0]
+      if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
+      const built = projectPatchFromFlags(context)
+      if ('message' in built) return usage(built.message, context.out, context.json)
+      if (Object.keys(built.patch).length === 0) {
+        return usage('btid project edit needs at least one field to change', context.out, context.json)
       }
-      patch['status'] = statusText
+      items = [{ id, patch: built.patch }]
     }
 
-    if (Object.keys(patch).length === 0) {
-      return usage('btid project edit needs at least one field to change', context.out, context.json)
-    }
+    const result = context.store.updateProjects(items as Parameters<Store['updateProjects']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
 
-    const result = context.store.project(id).update(patch as Parameters<ReturnType<Store['project']>['update']>[0])
-    if (!result.ok) return refusal(result, context.out, context.json)
-
-    const committed = await commit(context, `project edit ${id}`)
+    const rows = result.value.map((handle) => handle.row!)
+    const committed = await commit(context, editMessage(items, 'projects', 'project edit'))
     if (committed !== null && committed !== 0) return committed
-    if (context.json) context.out.json(result.value)
-    else context.out.line(`edited  ${result.value.id}   ${result.value.name}`)
+
+    if (context.json) context.out.json(rows)
+    else for (const row of rows) context.out.line(`edited  ${row.id}   ${row.name}`)
     return 0
   },
 }
+
+/** The flags of `project edit`, as an update patch. */
+function projectPatchFromFlags(context: VerbContext): { patch: Record<string, unknown> } | { message: string } {
+  const patch: Record<string, unknown> = {}
+  const name = stringFlag(context.flags, 'name')
+  if (name !== null) patch['name'] = name
+  const description = stringFlag(context.flags, 'description')
+  if (description !== null) patch['description'] = description
+  const start = stringFlag(context.flags, 'start')
+  if (start !== null) patch['startDate'] = start === 'none' ? null : start
+  const end = stringFlag(context.flags, 'end')
+  if (end !== null) patch['endDate'] = end === 'none' ? null : end
+  const color = stringFlag(context.flags, 'color')
+  if (color !== null) patch['color'] = color
+  const members = stringFlag(context.flags, 'members')
+  if (members !== null) patch['members'] = members === 'none' ? [] : listOf(members)
+  const labels = stringFlag(context.flags, 'labels')
+  if (labels !== null) patch['labels'] = labels === 'none' ? [] : listOf(labels)
+  const statusText = stringFlag(context.flags, 'status')
+  if (statusText !== null) {
+    if (statusText !== 'active' && statusText !== 'archived') {
+      return { message: `--status “${statusText}” is not one of active, archived` }
+    }
+    patch['status'] = statusText
+  }
+  return { patch }
+}
+
 
 // --- person -------------------------------------------------------------------------
 
@@ -647,45 +731,67 @@ async function joinBatch(context: VerbContext, file: string): Promise<number> {
 
 const personEdit: Verb = {
   name: 'person edit',
-  summary: 'Change somebody: their name, handle, role, or whether they are active. The manager’s act.',
+  summary: 'Change somebody, or a list of them from --file, in one commit. The manager’s act.',
   usage:
-    'btid person edit <id> [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
-  flags: { name: 'value', handle: 'value', role: 'value', active: 'value', 'dry-run': 'boolean' },
+    'btid person edit (<id> [fields] | --file <path|->) [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
+  flags: { name: 'value', handle: 'value', role: 'value', active: 'value', file: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const id = context.args[0]
-    if (id === undefined) return usage('btid person edit <id>', context.out, context.json)
+    const file = stringFlag(context.flags, 'file')
+    let items: EditItem[]
 
-    const patch: Record<string, unknown> = {}
-    const name = stringFlag(context.flags, 'name')
-    if (name !== null) patch['displayName'] = name
-    const handle = stringFlag(context.flags, 'handle')
-    if (handle !== null) patch['githubHandle'] = handle
-    const roleText = stringFlag(context.flags, 'role')
-    if (roleText !== null) {
-      if (roleText !== 'member' && roleText !== 'manager') {
-        return usage(`--role “${roleText}” is not one of member, manager`, context.out, context.json)
+    if (file !== null) {
+      const read = readEdits(context, file)
+      if ('message' in read) return usage(read.message, context.out, context.json)
+      items = read.items
+    } else {
+      const id = context.args[0]
+      if (id === undefined) return usage('btid person edit <id>', context.out, context.json)
+      const built = personPatchFromFlags(context)
+      if ('message' in built) return usage(built.message, context.out, context.json)
+      if (Object.keys(built.patch).length === 0) {
+        return usage('btid person edit needs at least one field to change', context.out, context.json)
       }
-      patch['role'] = roleText
-    }
-    const active = booleanFlag(context.flags, 'active')
-    if (active === undefined) return usage('--active takes on or off', context.out, context.json)
-    if (active !== null) patch['active'] = active
-
-    if (Object.keys(patch).length === 0) {
-      return usage('btid person edit needs at least one field to change', context.out, context.json)
+      items = [{ id, patch: built.patch }]
     }
 
-    const result = context.store.person(id).update(patch as Parameters<ReturnType<Store['person']>['update']>[0])
-    if (!result.ok) return refusal(result, context.out, context.json)
+    const result = context.store.updatePersons(items as Parameters<Store['updatePersons']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
 
-    const committed = await commit(context, `person edit ${id}`)
+    const rows = result.value.map((handle) => handle.row!)
+    const committed = await commit(context, editMessage(items, 'people', 'person edit'))
     if (committed !== null && committed !== 0) return committed
-    if (context.json) context.out.json(result.value)
-    else context.out.line(`edited  ${result.value.id}   ${result.value.displayName}   ${result.value.role}${result.value.active ? '' : ' (inactive)'}`)
+
+    if (context.json) context.out.json(rows)
+    else {
+      for (const row of rows) {
+        context.out.line(`edited  ${row.id}   ${row.displayName}   ${row.role}${row.active ? '' : ' (inactive)'}`)
+      }
+    }
     return 0
   },
 }
+
+/** The flags of `person edit`, as an update patch. */
+function personPatchFromFlags(context: VerbContext): { patch: Record<string, unknown> } | { message: string } {
+  const patch: Record<string, unknown> = {}
+  const name = stringFlag(context.flags, 'name')
+  if (name !== null) patch['displayName'] = name
+  const handle = stringFlag(context.flags, 'handle')
+  if (handle !== null) patch['githubHandle'] = handle
+  const roleText = stringFlag(context.flags, 'role')
+  if (roleText !== null) {
+    if (roleText !== 'member' && roleText !== 'manager') {
+      return { message: `--role “${roleText}” is not one of member, manager` }
+    }
+    patch['role'] = roleText
+  }
+  const active = booleanFlag(context.flags, 'active')
+  if (active === undefined) return { message: '--active takes on or off' }
+  if (active !== null) patch['active'] = active
+  return { patch }
+}
+
 
 // --- cache --------------------------------------------------------------------------
 

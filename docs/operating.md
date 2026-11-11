@@ -174,9 +174,20 @@ Nothing is settable only by editing JSON. The three `edit` verbs cover the three
 
 | verb | flags |
 |---|---|
-| `task edit` | `--title --description --dod --status --priority --assignee --start --end --percent --estimate --tracked --small --blocked --blocked-reason --blocked-by --labels` (+ `--note` for a tracked end-day move) |
+| `task edit` | `<id>` + `--title --description --dod --status --priority --assignee --start --end --percent --estimate --tracked --small --blocked --blocked-reason --blocked-by --labels` (+ `--note` for a tracked end-day move), **or `--file` for a list** |
 | `project edit` | `--name --start --end --description --status --color --members --labels` |
 | `person edit` | `--name --handle --role --active` |
+
+**Every `edit` also takes `--file`**: an array of `{"id": "alpha-a1b2", "patch": {…}, "note": "…"}`, applied as one command and
+one commit. It is the core's own update input, not a second dialect — and a single edit is a one-item batch internally, so
+there is one code path:
+
+```console
+$ btid task edit --file edits.json
+edited  alpha-a1b2   rev 2
+edited  alpha-c3d4   rev 1
+2 tasks in one commit
+```
 
 `none` clears a nullable field (`--estimate none`, `--labels none`, `--start none`). On/off flags take `on` or `off` — a bare
 flag cannot say whether you meant to set or clear.
