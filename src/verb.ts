@@ -19,6 +19,14 @@ export interface VerbContext {
   source: 'flag' | 'env' | 'file'
   /** Where snapshots live — the default for this machine, or wherever a test pointed it. */
   cacheDir: string
+  /**
+   * The commit the verb made, set by its one `commit()` call.
+   *
+   * `null` when there was nothing to write (the engine says so), `undefined` when the verb did not write at all. The
+   * dispatcher uses it to keep the snapshot current instead of throwing it away — a write has the new head in hand, which is
+   * the one moment the cache can be refreshed for free.
+   */
+  committed?: string | null
   /** Whatever followed the verb, positionally. */
   args: readonly string[]
   /** `--flag value`, `--flag=value`, and bare `--flag` as `true`. */

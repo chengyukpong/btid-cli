@@ -7,7 +7,7 @@ import { cacheRoot, dropSnapshot, readSnapshot, snapshotPath, writeSnapshot } fr
 import { ALL_VERBS } from './help'
 import { consoleOutput, describeStore, type Output } from './output'
 import { findVerb } from './verbs'
-import type { Verb } from './verb'
+import type { Verb, VerbContext } from './verb'
 
 /**
  * The entry point: parse, open, dispatch, turn the answer into an exit code.
@@ -233,7 +233,7 @@ export async function run(options: RunOptions): Promise<number> {
   const { store } = opened
 
   try {
-    const code = await verb.run({
+    const context: VerbContext = {
       store,
       location: resolved.store,
       source: resolved.from,
@@ -242,15 +242,39 @@ export async function run(options: RunOptions): Promise<number> {
       flags,
       out,
       json,
-    })
+    }
+    const code = await verb.run(context)
     if (code !== 0) return code
 
-    // Keep the snapshot unless this command wrote: after a commit these rows describe the store *before* it. A read leaves
-    // them true, and the next command skips the load entirely.
-    if (verb.writes === true) dropSnapshot(opened.snapshotPath)
-    else if (options.fresh !== true && flags['fresh'] !== true) {
-      const head = await opened.client.head().catch(() => null)
-      if (head !== null) writeSnapshot(opened.snapshotPath, { ...store.snapshot(), commit: head })
+    // Keep the snapshot true, whichever way this command went.
+    //
+    // A read leaves it exactly as it was. A write has just committed, so the engine's rows and its listing are the new
+    // state — and the verb hands back the commit sha. That is a snapshot refresh with **no request at all**, which is what
+    // keeps a loop of writes from paying for a cold load on every one of them.
+    if (options.fresh !== true && flags['fresh'] !== true) {
+      if (verb.writes !== true) {
+        const head = await opened.client.head().catch(() => null)
+        if (head !== null) writeSnapshot(opened.snapshotPath, { ...store.snapshot(), commit: head })
+      } else if (typeof context.committed === 'string') {
+        // The rows are the engine's own after a write, but its listing is not something to keep: `githubdb`'s post-write
+        // baseline is built from the paths it wrote, not their shas (recorded as a task in that repository). One tree request
+        // makes the snapshot's `seen` authoritative, which is what a later write's conflict check relies on — still one
+        // request instead of the five a reload costs.
+        const listing = await opened.client.tree().catch(() => null)
+        if (listing === null) dropSnapshot(opened.snapshotPath)
+        else {
+          writeSnapshot(opened.snapshotPath, {
+            ...store.snapshot(),
+            seen: listing.entries.map((entry) => [entry.path, entry.sha] as [string, string]),
+            commit: context.committed,
+          })
+        }
+      } else if (context.committed === null) {
+        // Nothing was written, so the head has not moved and the snapshot is still true. Leave it.
+      } else {
+        // The verb wrote through something other than `commit()`; the safe answer is to forget the file.
+        dropSnapshot(opened.snapshotPath)
+      }
     }
     return 0
   } catch (error) {

@@ -1,6 +1,6 @@
 {
   "name": "btid-cli",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "The BTID terminal front end: parse, one command from btid-core, print.",
   "bin": {

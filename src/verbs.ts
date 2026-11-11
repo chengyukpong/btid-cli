@@ -50,13 +50,18 @@ const stringFlag = (flags: VerbContext['flags'], name: string): string | null =>
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
 }
 
-/** One commit per successful write, named after the verb and the row. */
+/**
+ * One commit per successful write, named after the verb and the row.
+ *
+ * Also the only place a verb learns the new commit sha, which is what lets the caller refresh the snapshot instead of dropping
+ * it: `dry-run` writes nothing and says what it would have; a real write records what the engine returned.
+ */
 async function commit(context: VerbContext, message: string): Promise<number | null> {
   if (context.flags['dry-run'] === true) {
     context.out.line(`would commit: ${message}`)
     return null
   }
-  await context.store.commit(message)
+  context.committed = await context.store.commit(message)
   return 0
 }
 

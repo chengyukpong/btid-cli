@@ -9,6 +9,8 @@ import type { StoreClient, CommitResult, FileChange, TagOptions, TreeListing } f
 export class FakeClient implements StoreClient {
   readonly files = new Map<string, string>()
   readonly messages: string[] = []
+  /** The branch, as a real one behaves: a commit moves it, and head() answers what it moved to. */
+  #head = 'c0'
 
   async tree(): Promise<TreeListing> {
     return {
@@ -29,8 +31,10 @@ export class FakeClient implements StoreClient {
       if (change.content === null) this.files.delete(change.path)
       else this.files.set(change.path, change.content)
     }
+    const commitSha = `c${this.messages.length}`
+    this.#head = commitSha
     return {
-      commitSha: `c${this.messages.length}`,
+      commitSha,
       parentSha: 'c0',
       written: changes.filter((change) => change.content !== null).map((change) => change.path),
       deleted: changes.filter((change) => change.content === null).map((change) => change.path),
@@ -38,7 +42,7 @@ export class FakeClient implements StoreClient {
   }
 
   async head(): Promise<string> {
-    return 'c0'
+    return this.#head
   }
 
   async tag(name: string, sha: string, options: TagOptions = {}): Promise<void> {

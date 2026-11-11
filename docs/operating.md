@@ -35,7 +35,8 @@ head — and either hydrates the rows it already has or loads the store afresh:
 |---|---|---|
 | first read (cold) | tree + one per file + head | ~3.0 s |
 | second read (snapshot) | head only | ~0.9 s |
-| a write | as before, then the snapshot is dropped | ~6 s |
+| a write (warm) | head + commit + one tree to refresh the snapshot | ~5 s |
+| a write (cold) | tree + files + commit + tree | ~6.5 s |
 
 - The file is **gzipped above 2 KB** and plain JSON below it — gzip by magic bytes, not by a flag, so a snapshot written by an
   older build still opens, and a small one stays readable with `cat`. A store is a tenth of its size on disk, which is what
@@ -44,8 +45,9 @@ head — and either hydrates the rows it already has or loads the store afresh:
 - `BTID_NO_CACHE=1` turns it off for a session; `BTID_CACHE_DIR` moves it.
 - `btid cache show` prints the directory and what is in it; `btid cache clear` deletes every snapshot — both work with no
   store and no token. A snapshot that will not decode is deleted on sight rather than parsed and rejected on every command.
-- **A write drops the snapshot**, because after a commit those rows describe the store *before* it. The next command loads
-  once and re-caches.
+- **A write refreshes the snapshot rather than dropping it.** The commit sha comes back from the write itself, so the rows
+  need no request; the listing is re-read with **one** tree call, because `githubdb`'s post-write baseline is built from paths
+  rather than shas (filed as a task there). A loop of writes therefore stays warm: ~5 s each instead of ~6.5 s.
 - The commit is a claim, and it is checked against the head every time — a snapshot is never trusted on its own.
 
 ### Which build is answering?

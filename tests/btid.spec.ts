@@ -495,6 +495,8 @@ describe('btid', () => {
       argv: ['--version'],
       env: {},
       out: consoleOutput((text) => lines.write(text)),
+      configPath: join(workspace, 'empty-config.json'),
+      cacheDir: workspace,
     })
     assert.equal(code, 0)
     assert.match(lines.text, /^btid \d+\.\d+\.\d+/)
@@ -638,17 +640,55 @@ describe('btid', () => {
     assert.match(lines.text, /Write the failing test/, 'the rows came from the snapshot')
   })
 
-  it('drops the snapshot when a command writes, so the next read does not serve stale rows', async () => {
-    const { readdirSync } = await import('node:fs')
+  it('refreshes the snapshot with the commit a write just made, so the loop stays warm', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
     assert.equal(await btid(['store', 'whoami']), 0)
-    assert.equal(readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length, 1)
+    const name = readdirSync(workspace).find((entry) => entry.endsWith('.snapshot.json'))!
+    const before = JSON.parse(readFileSync(join(workspace, name), 'utf8')) as { commit: string }
 
     assert.equal(await btid(['task', 'new', '--project', 'alpha', '--title', 'After a write']), 0)
-    assert.equal(
-      readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length,
-      0,
-      'a write invalidates it',
-    )
+
+    const survivors = readdirSync(workspace).filter((entry) => entry.endsWith('.snapshot.json'))
+    assert.equal(survivors.length, 1, 'the file is still there')
+    const after = JSON.parse(readFileSync(join(workspace, survivors[0]!), 'utf8')) as { commit: string }
+
+    // The fake client's commits are c1, c2, …: a refresh records the one the write produced, not the one before it.
+    assert.equal(before.commit, 'c0')
+    assert.equal(after.commit, client.messages.length > 0 ? `c${client.messages.length}` : 'c0')
+    assert.notEqual(after.commit, before.commit, 'the snapshot moved with the commit')
+  })
+
+  it('a second write reads no blobs, because the snapshot it resumes from is the one it just wrote', async () => {
+    assert.equal(await btid(['store', 'whoami']), 0)
+    assert.equal(await btid(['task', 'new', '--project', 'alpha', '--title', 'One']), 0)
+
+    // Every blob read from here fails: only a resumed store can finish the command.
+    let blobs = 0
+    const counting = {
+      tree: () => client.tree(),
+      blob: async (sha: string) => {
+        blobs += 1
+        return client.blob(sha)
+      },
+      head: () => client.head(),
+      commit: (files: Parameters<FakeClient['commit']>[0], message: string) => client.commit(files, message),
+      tag: (name: string, sha: string) => client.tag(name, sha),
+      untag: (name: string) => client.untag(name),
+    }
+
+    lines.written.length = 0
+    const code = await run({
+      argv: ['--store', 'chengyukpong/btid-data', 'task', 'new', '--project', 'alpha', '--title', 'Two'],
+      env: { BTID_TOKEN: 'test-token' },
+      out: consoleOutput((text) => lines.write(text)),
+      clientFor: () => counting as unknown as FakeClient,
+      tokenFor: () => 'test-token',
+      loginFor: async () => 'chengyukpong',
+      configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+    })
+    assert.equal(code, 0, lines.text)
+    assert.equal(blobs, 0, 'the store was hydrated, not read')
   })
 
   it('--fresh ignores the snapshot and writes a new one from a real load', async () => {
@@ -732,7 +772,13 @@ describe('btid', () => {
   })
 
   it('refuses without a store, naming the three ways to give one', async () => {
-    const code = await run({ argv: ['task', 'ls'], env: {}, out: consoleOutput((text) => lines.write(text)) })
+    const code = await run({
+      argv: ['task', 'ls'],
+      env: {},
+      out: consoleOutput((text) => lines.write(text)),
+      configPath: join(workspace, 'empty-config.json'),
+      cacheDir: workspace,
+    })
     assert.equal(code, 2)
     assert.match(lines.text, /--store owner\/repo/)
     assert.match(lines.text, /BTID_STORE/)
