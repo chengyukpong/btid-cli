@@ -41,6 +41,18 @@ version this build speaks (a store at another version is refused, not migrated),
 
 ## 1. Install it, or run it from the checkout
 
+The published artifact is **[release/btid-cli-0.2.0.tgz](release/btid-cli-0.2.0.tgz)** — **self-contained**: `btid-core` and
+`githubdb` are bundled, so it installs anywhere, with no checkout beside it:
+
+```console
+$ npm install -g ./btid-cli-0.2.0.tgz
+$ btid version
+btid 0.2.0 · btid-core schema v1 · manifest 1
+```
+
+That is what "publish" means while no registry is available; `btid-core/docs/distribution.md` records the registry checklist.
+
+
 ```console
 $ npm install -g .          # from the btid-cli checkout; `prepare` builds `dist/`
 $ btid help --json | jq '.verbs | length'
