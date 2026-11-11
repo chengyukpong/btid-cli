@@ -30,6 +30,12 @@ A read keeps a **snapshot** of the store beside the commit it was read at — th
 tab — so the next command asks for the branch head and nothing else. `docs/operating.md` has the table; `--fresh` and
 `BTID_NO_CACHE=1` are the escapes.
 
+## One task, end to end
+
+[`docs/lifecycle-of-a-task.md`](docs/lifecycle-of-a-task.md) follows a single imaginary task from `task new` to `task edit
+--status done`: every command, every refusal at the moment it happens, the row's state after each one, and the two lifecycle
+moments (archive, delete) that still have no verb.
+
 ## Driving it from an agent
 
 [`docs/operating.md`](docs/operating.md) is the hand-off: install, where the store is, the loop, what the exit codes mean,
