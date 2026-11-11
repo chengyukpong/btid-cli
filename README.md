@@ -24,6 +24,12 @@ Nothing is re-implemented here. A verb is a thin parse of arguments, one call, a
 No browser relay, no GitHub App: a token from `gh auth token` when `gh` is signed in, otherwise a device flow so the CLI
 works on a machine that has never had `gh`. Either way the token stays local.
 
+## Why the second command is fast
+
+A read keeps a **snapshot** of the store beside the commit it was read at — the same trick `btid2` uses for the next browser
+tab — so the next command asks for the branch head and nothing else. `docs/operating.md` has the table; `--fresh` and
+`BTID_NO_CACHE=1` are the escapes.
+
 ## Driving it from an agent
 
 [`docs/operating.md`](docs/operating.md) is the hand-off: install, where the store is, the loop, what the exit codes mean,

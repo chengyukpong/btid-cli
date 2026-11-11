@@ -16,7 +16,7 @@ btid-cli@0.1.0 -> C:\workspace\dsh\btid3\btid-cli
 Three consequences, all worth knowing before operating:
 
 - **A change to this checkout is a change to `btid`.** No reinstall and no rebuild needed for the CLI's own code — `btid` runs
-  this `dist/`. But the core arrives as a **published artifact**, `release/btid-core-0.2.0.tgz` (`file:` in
+  this `dist/`. But the core arrives as a **published artifact**, `release/btid-core-0.6.0.tgz` (`file:` in
   `package.json`), the same way `githubdb` does: after changing `btid-core`, bump its version, `npm pack` into `release/`,
   repoint the CLI's dependency and reinstall. That is the distribution being exercised rather than assumed.
 - **Moving or deleting the checkout breaks the command.** `npm uninstall -g btid-cli` and reinstall from the new location.
@@ -59,13 +59,13 @@ version this build speaks (a store at another version is refused, not migrated),
 
 ## 1. Install it, or run it from the checkout
 
-The published artifact is **[release/btid-cli-0.2.0.tgz](release/btid-cli-0.2.0.tgz)** — **self-contained**: `btid-core` and
-`githubdb` are bundled, so it installs anywhere, with no checkout beside it:
+The published artifact is **[release/btid-cli-0.3.0.tgz](release/btid-cli-0.3.0.tgz)** — **self-contained**: `btid-core 0.6.0`
+and `githubdb 2.1.0` are bundled, so it installs anywhere, with no checkout beside it:
 
 ```console
-$ npm install -g ./btid-cli-0.2.0.tgz
+$ npm install -g ./btid-cli-0.3.0.tgz
 $ btid version
-btid 0.2.0 · btid-core schema v1 · manifest 1
+btid 0.3.0 · btid-core schema v1 · manifest 1
 ```
 
 That is what "publish" means while no registry is available; `btid-core/docs/distribution.md` records the registry checklist.
