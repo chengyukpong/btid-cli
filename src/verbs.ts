@@ -1,6 +1,7 @@
 import { BOARD_SORTS, EXPECT } from 'btid-core'
 import type { BoardSort, CreateProjectInput, CreateTaskInput, Store, Task, TaskHandle } from 'btid-core'
 import { has, readBatch, textOf, type BatchItem } from './batch'
+import { cacheRoot, clearCache, listCache } from './snapshot'
 import { dayOf, describeStore } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
 import type { Column } from './output'
@@ -681,6 +682,59 @@ const personEdit: Verb = {
   },
 }
 
+// --- cache --------------------------------------------------------------------------
+
+const cacheShow: Verb = {
+  name: 'cache show',
+  summary: 'Where the store snapshot lives, and what is in it. Needs no store.',
+  usage: 'btid cache show [--json]',
+  async run(context) {
+    const root = context.cacheDir
+    const entries = listCache(root)
+    if (context.json) {
+      context.out.json({
+        dir: root,
+        entries: entries.map((entry) => ({ name: entry.name, bytes: entry.bytes, modified: entry.modified.toISOString() })),
+        bytes: entries.reduce((total, entry) => total + entry.bytes, 0),
+      })
+      return 0
+    }
+    context.out.line(`cache  ${root}`)
+    if (entries.length === 0) {
+      context.out.line('       nothing cached: the first read will load the store and keep a snapshot')
+      return 0
+    }
+    for (const entry of entries) {
+      const when = entry.modified.toISOString().slice(0, 16).replace('T', ' ')
+      context.out.line(`  ${entry.name}  ${Math.max(1, Math.round(entry.bytes / 1024))} KB  ${when}`)
+    }
+    context.out.line(`${entries.length} ${entries.length === 1 ? 'file' : 'files'}, ${Math.max(1, Math.round(entries.reduce((total, entry) => total + entry.bytes, 0) / 1024))} KB`)
+    return 0
+  },
+}
+
+const cacheClear: Verb = {
+  name: 'cache clear',
+  summary: 'Delete every store snapshot. Needs no store; the next read rebuilds them.',
+  usage: 'btid cache clear [--json]',
+  async run(context) {
+    const root = context.cacheDir
+    const before = listCache(root)
+    const { removed, bytes } = clearCache(root)
+    if (context.json) {
+      context.out.json({ dir: root, removed, bytes })
+      return 0
+    }
+    if (before.length === 0) context.out.line(`cache  ${root}`)
+    if (removed === 0) {
+      context.out.line('nothing to clear: the cache was already empty')
+      return 0
+    }
+    context.out.line(`cleared ${removed} ${removed === 1 ? 'snapshot' : 'snapshots'}, ${Math.max(1, Math.round(bytes / 1024))} KB`)
+    return 0
+  },
+}
+
 // --- store --------------------------------------------------------------------------
 
 const storeWhoami: Verb = {
@@ -753,6 +807,8 @@ export const VERBS: readonly Verb[] = [
   personEdit,
   storeWhoami,
   storeInit,
+  cacheShow,
+  cacheClear,
   version,
 ]
 

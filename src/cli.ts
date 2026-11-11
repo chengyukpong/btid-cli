@@ -110,7 +110,11 @@ async function connect(
     return { store: created, client, snapshotPath: path }
   }
 
-  const stored = options.fresh === true ? null : readSnapshot(path)
+  const read = options.fresh === true ? { snapshot: null, broken: false } : readSnapshot(path)
+  const stored = read.snapshot
+
+  // An unreadable file is deleted here rather than ignored: left alone it would be parsed and rejected on every command.
+  if (read.broken) dropSnapshot(path)
 
   if (stored !== null) {
     // One request, and it is the one that decides everything: if the branch has not moved, these rows are the store.
@@ -181,13 +185,14 @@ export async function run(options: RunOptions): Promise<number> {
     return 0
   }
 
-  // `help` and `version` answer questions about the binary, so neither requires a store.
-  if (verb.name === 'help' || verb.name === 'version') {
+  // These answer questions about the binary or the cache, so none of them requires a store.
+  if (STORE_LESS.has(verb.name)) {
     try {
       return await verb.run({
         store: undefined as never,
         location: { owner: '', repo: '', ref: '' },
         source: 'flag',
+        cacheDir: options.cacheDir ?? cacheRoot(),
         args: rest,
         flags,
         out,
@@ -232,6 +237,7 @@ export async function run(options: RunOptions): Promise<number> {
       store,
       location: resolved.store,
       source: resolved.from,
+      cacheDir: options.cacheDir ?? cacheRoot(),
       args: rest,
       flags,
       out,
@@ -254,6 +260,9 @@ export async function run(options: RunOptions): Promise<number> {
     if (process.env['BTID_DEBUG'] === '1') process.stderr.write(`store ${describeStore(resolved.store)}\n`)
   }
 }
+
+/** The verbs that must work with no store and no token at all. */
+const STORE_LESS = new Set(['help', 'version', 'cache show', 'cache clear'])
 
 /** A fault is not a refusal: its code maps to an exit number, and `--json` carries it as data. */
 function fault(error: unknown, out: Output, json: boolean): number {

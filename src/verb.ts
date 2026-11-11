@@ -17,6 +17,8 @@ export interface VerbContext {
   location: { owner: string; repo: string; ref: string }
   /** Which of the three sources named it. */
   source: 'flag' | 'env' | 'file'
+  /** Where snapshots live — the default for this machine, or wherever a test pointed it. */
+  cacheDir: string
   /** Whatever followed the verb, positionally. */
   args: readonly string[]
   /** `--flag value`, `--flag=value`, and bare `--flag` as `true`. */

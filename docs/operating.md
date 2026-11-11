@@ -42,6 +42,8 @@ head — and either hydrates the rows it already has or loads the store afresh:
   `btid2` found for the same JSON.
 - `--fresh` ignores the snapshot for one call and writes a new one from a real load.
 - `BTID_NO_CACHE=1` turns it off for a session; `BTID_CACHE_DIR` moves it.
+- `btid cache show` prints the directory and what is in it; `btid cache clear` deletes every snapshot — both work with no
+  store and no token. A snapshot that will not decode is deleted on sight rather than parsed and rejected on every command.
 - **A write drops the snapshot**, because after a commit those rows describe the store *before* it. The next command loads
   once and re-caches.
 - The commit is a claim, and it is checked against the head every time — a snapshot is never trusted on its own.

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { decodeSnapshot, encodeSnapshot } from './snapshot-codec'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,16 +47,68 @@ export const snapshotPath = (
   root: string = cacheRoot(),
 ): string => join(root, `${owner}__${repo}__${ref}.snapshot.json`)
 
-/** The stored snapshot, or null when there is none, it will not parse, or caching is off. */
-export function readSnapshot(path: string, env: NodeJS.ProcessEnv = process.env): StoreSnapshot | null {
-  if (!cacheEnabled(env) || !existsSync(path)) return null
+/** What a cache read found. `broken` means there is a file there and it is not a snapshot anybody can use. */
+export interface SnapshotRead {
+  snapshot: StoreSnapshot | null
+  /** True when a file exists but cannot be decoded — half-written, truncated, or not JSON at all. */
+  broken: boolean
+}
+
+/**
+ * The stored snapshot.
+ *
+ * A file that will not decode is reported rather than hidden, because the caller can then *delete* it: an unreadable snapshot
+ * that is quietly ignored is a file that gets parsed and rejected on every command until somebody clears the cache by hand.
+ */
+export function readSnapshot(path: string, env: NodeJS.ProcessEnv = process.env): SnapshotRead {
+  if (!cacheEnabled(env) || !existsSync(path)) return { snapshot: null, broken: false }
   try {
     // gzipped or not, decided by the bytes: a file the previous build wrote still reads.
-    return decodeSnapshot(readFileSync(path)) as StoreSnapshot
+    return { snapshot: decodeSnapshot(readFileSync(path)) as StoreSnapshot, broken: false }
   } catch {
-    // A half-written, hand-edited or truncated file is a miss, not an error: the cost of a miss is one load.
-    return null
+    // A half-written, hand-edited or truncated file is a miss — and a miss the caller should clean up.
+    return { snapshot: null, broken: true }
   }
+}
+
+/** One snapshot file in the cache: enough for `btid cache show` to say what is there. */
+export interface CacheEntry {
+  path: string
+  name: string
+  bytes: number
+  modified: Date
+}
+
+/** Every snapshot in the cache directory, newest first. Empty when the cache has never been used. */
+export function listCache(root: string = cacheRoot()): CacheEntry[] {
+  try {
+    return readdirSync(root)
+      .filter((name) => name.endsWith('.snapshot.json'))
+      .map((name) => {
+        const path = join(root, name)
+        const stat = statSync(path)
+        return { path, name, bytes: stat.size, modified: stat.mtime }
+      })
+      .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+  } catch {
+    // No directory, or one that cannot be read: either way there is nothing to report.
+    return []
+  }
+}
+
+/** Remove every snapshot, and say what went. The directory is left in place — the next read needs it. */
+export function clearCache(root: string = cacheRoot()): { removed: number; bytes: number } {
+  const entries = listCache(root)
+  let bytes = 0
+  for (const entry of entries) {
+    try {
+      rmSync(entry.path, { force: true })
+      bytes += entry.bytes
+    } catch {
+      // A file that will not go is reported by its absence from the count, not by failing the command.
+    }
+  }
+  return { removed: entries.length, bytes }
 }
 
 /**

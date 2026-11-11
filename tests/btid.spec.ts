@@ -670,6 +670,67 @@ describe('btid', () => {
     assert.equal(typeof before.commit, 'string')
   })
 
+  it('says where the cache is and what is in it, with no store', async () => {
+    const call = (argv: string[], cacheDir: string) =>
+      run({
+        argv,
+        env: {},
+        out: consoleOutput((text) => lines.write(text)),
+        cacheDir,
+      })
+
+    assert.equal(await call(['cache', 'show'], workspace), 0)
+    assert.match(lines.text, /nothing cached/)
+
+    // A real snapshot, written by a read against the fake store.
+    assert.equal(await btid(['store', 'whoami']), 0)
+    lines.written.length = 0
+    assert.equal(await call(['cache', 'show', '--json'], workspace), 0)
+    const shown = lines.json[0] as { dir: string; entries: { name: string; bytes: number }[]; bytes: number }
+    assert.equal(shown.entries.length, 1)
+    assert.match(shown.entries[0]!.name, /chengyukpong__btid-data__main\.snapshot\.json/)
+    assert.ok(shown.bytes > 0)
+  })
+
+  it('clears the cache, and says so the second time too', async () => {
+    assert.equal(await btid(['store', 'whoami']), 0)
+    const { readdirSync } = await import('node:fs')
+    assert.equal(readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length, 1)
+
+    lines.written.length = 0
+    const code = await run({
+      argv: ['cache', 'clear'],
+      env: {},
+      out: consoleOutput((text) => lines.write(text)),
+      cacheDir: workspace,
+    })
+    assert.equal(code, 0)
+    assert.match(lines.text, /cleared 1 snapshot/)
+    assert.equal(readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length, 0)
+
+    lines.written.length = 0
+    assert.equal(await run({ argv: ['cache', 'clear'], env: {}, out: consoleOutput((text) => lines.write(text)), cacheDir: workspace }), 0)
+    assert.match(lines.text, /nothing to clear/)
+  })
+
+  it('deletes a snapshot it cannot decode, instead of failing or ignoring it forever', async () => {
+    const { readdirSync, writeFileSync, readFileSync } = await import('node:fs')
+    assert.equal(await btid(['store', 'whoami']), 0)
+    const name = readdirSync(workspace).find((entry) => entry.endsWith('.snapshot.json'))!
+    const path = join(workspace, name)
+
+    // A truncated write: the file is there, and it is not a snapshot.
+    writeFileSync(path, readFileSync(path).subarray(0, 40))
+
+    lines.written.length = 0
+    const code = await btid(['store', 'whoami'])
+    assert.equal(code, 0, 'the command still works: the store is loaded')
+    const survivors = readdirSync(workspace).filter((entry) => entry.endsWith('.snapshot.json'))
+    assert.equal(survivors.length, 1, 'and a fresh snapshot replaced it')
+    const fresh = JSON.parse(readFileSync(join(workspace, survivors[0]!), 'utf8')) as { commit: string }
+    assert.equal(typeof fresh.commit, 'string')
+  })
+
   it('refuses without a store, naming the three ways to give one', async () => {
     const code = await run({ argv: ['task', 'ls'], env: {}, out: consoleOutput((text) => lines.write(text)) })
     assert.equal(code, 2)
