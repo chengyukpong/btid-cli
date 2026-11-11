@@ -70,6 +70,16 @@ const task = (over: Record<string, unknown> = {}) => ({
 
 let client: FakeClient
 let lines: Lines
+let workspace: string
+
+/** Write a batch file and return its path. */
+const batchFile = async (name: string, body: unknown): Promise<string> => {
+  const { writeFile } = await import('node:fs/promises')
+  const { join } = await import('node:path')
+  const path = join(workspace, name)
+  await writeFile(path, JSON.stringify(body), 'utf8')
+  return path
+}
 
 const btid = (argv: string[]) =>
   run({
@@ -82,7 +92,11 @@ const btid = (argv: string[]) =>
   })
 
 describe('btid', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const { mkdtemp } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    workspace = await mkdtemp(join(tmpdir(), 'btid-batch-'))
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
     client.put('people.json', { [managerRow.id]: managerRow })
@@ -197,6 +211,105 @@ describe('btid', () => {
     const code = await btid(['project', 'edit', 'nope', '--name', 'Anything'])
     assert.equal(code, 1)
     assert.match(lines.text, /PROJECT_NOT_FOUND/)
+  })
+
+  it('captures a list of tasks in one commit, from --file', async () => {
+    const path = await batchFile('tasks.json', [
+      { projectId: 'alpha', title: 'One' },
+      { projectId: 'alpha', title: 'Two', priority: 'urgent' },
+      { projectId: 'alpha', title: 'Three', assigneeId: 'chengyukpong' },
+    ])
+    const code = await btid(['task', 'new', '--file', path])
+    assert.equal(code, 0, lines.text)
+    assert.equal(client.messages.length, 1, 'one commit for three tasks')
+    assert.equal(client.messages[0], 'capture 3 tasks')
+    assert.equal(Object.keys(client.json('projects/alpha/tasks.json')).length, 4, 'the fixture row plus three')
+    assert.match(lines.text, /3 tasks in one commit/)
+  })
+
+  it('fills the project in from --project for a file that omits it', async () => {
+    const path = await batchFile('titles.json', [{ title: 'One' }, { title: 'Two' }])
+    const code = await btid(['task', 'new', '--project', 'alpha', '--file', path])
+    assert.equal(code, 0)
+    assert.equal(client.messages[0], 'capture 2 tasks')
+  })
+
+  it('says which item refused, and commits nothing at all', async () => {
+    const path = await batchFile('bad.json', [
+      { projectId: 'alpha', title: 'One' },
+      { projectId: 'alpha', title: '   ' },
+      { projectId: 'alpha', title: 'Three' },
+    ])
+    const at = client.messages.length
+    const code = await btid(['task', 'new', '--file', path, '--json'])
+    assert.equal(code, 1, lines.text)
+    assert.deepEqual(lines.json[0], {
+      error: { kind: 'refused', code: 'TITLE_REQUIRED', message: 'A task needs a title.', at: 2 },
+    })
+    assert.equal(client.messages.length, at, 'nothing was committed')
+    assert.equal(Object.keys(client.json('projects/alpha/tasks.json')).length, 1, 'not even item 1 was written')
+  })
+
+  it('prints item N in the human refusal too', async () => {
+    const path = await batchFile('bad2.json', [{ projectId: 'nope', title: 'Two' }])
+    const code = await btid(['task', 'new', '--file', path])
+    assert.equal(code, 1)
+    assert.match(lines.text, /refused: item 1: Project nope is not in the store\. \(PROJECT_MISSING\)/)
+  })
+
+  it('starts a list of projects in one commit, each ready to take work', async () => {
+    const path = await batchFile('projects.json', [
+      { id: 'beta', name: 'Beta Two', startDate: '2026-11-02', endDate: '2026-11-30' },
+      { id: 'gamma', name: 'Gamma Three', startDate: '2026-11-02', endDate: '2026-11-30' },
+    ])
+    const code = await btid(['project', 'new', '--file', path])
+    assert.equal(code, 0)
+    assert.equal(client.messages[0], 'start 2 projects')
+
+    lines.written.length = 0
+    const captured = await btid(['task', 'new', '--project', 'gamma', '--title', 'Work'])
+    assert.equal(captured, 0, 'a project from the batch can take work immediately')
+  })
+
+  it('adds a roster in one commit, and refuses a duplicate inside it', async () => {
+    const path = await batchFile('people.json', [
+      { login: 'ada.lovelace', displayName: 'Ada Lovelace' },
+      { login: 'grace', displayName: 'Grace Hopper' },
+    ])
+    assert.equal(await btid(['person', 'new', '--file', path]), 0, lines.text)
+    assert.equal(client.messages[0], 'add 2 people')
+
+    const again = await batchFile('people2.json', [
+      { login: 'newcomer', displayName: 'Newcomer' },
+      { login: 'ada.lovelace', displayName: 'Ada again' },
+    ])
+    lines.written.length = 0
+    const code = await btid(['person', 'new', '--file', again, '--json'])
+    assert.equal(code, 1, lines.text)
+    const error = (lines.json[0] as { error: { code: string; at: number } }).error
+    assert.equal(error.code, 'PERSON_EXISTS')
+    assert.equal(error.at, 2)
+  })
+
+  it('accepts {"items": [...]} as well as a bare array', async () => {
+    const path = await batchFile('wrapped.json', { items: [{ projectId: 'alpha', title: 'One' }] })
+    assert.equal(await btid(['task', 'new', '--file', path]), 0)
+    assert.equal(client.messages[0], 'capture 1 task')
+  })
+
+  it('refuses a file that is one object, and names the two shapes', async () => {
+    const path = await batchFile('single.json', { projectId: 'alpha', title: 'One' })
+    const code = await btid(['task', 'new', '--file', path])
+    assert.equal(code, 2)
+    assert.match(lines.text, /must be a JSON array of items, or an object with an "items" array/)
+  })
+
+  it('writes nothing with --file and --dry-run', async () => {
+    const path = await batchFile('dry.json', [{ projectId: 'alpha', title: 'One' }, { projectId: 'alpha', title: 'Two' }])
+    const code = await btid(['task', 'new', '--file', path, '--dry-run'])
+    assert.equal(code, 0)
+    assert.match(lines.text, /would capture/)
+    assert.equal(client.messages.length, 0)
   })
 
   it('refuses a member adding a project, in the manager’s words', async () => {

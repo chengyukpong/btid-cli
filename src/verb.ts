@@ -43,8 +43,21 @@ export interface Verb {
 /** Print a refusal and return the exit code. The sentence is the core's; this only chooses the number. */
 export function refusal<T>(result: CommandResult<T>, out: Output, json: boolean): number {
   if (result.ok) return 0
-  if (json) out.json({ error: { kind: 'refused', code: result.code, message: result.reason } })
-  else out.line(`refused: ${result.reason} (${result.code})`)
+  // A batch refusal carries `at`, and it is printed the way a person reads a list — "item 2" — because the alternative is
+  // somebody bisecting a JSON file to find which line the store objected to.
+  const at = (result as { at?: number }).at
+  if (json) {
+    out.json({
+      error: {
+        kind: 'refused',
+        code: result.code,
+        message: result.reason,
+        ...(at === undefined ? {} : { at }),
+      },
+    })
+  } else {
+    out.line(`refused: ${at === undefined ? '' : `item ${at}: `}${result.reason} (${result.code})`)
+  }
   return 1
 }
 

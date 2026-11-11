@@ -95,6 +95,42 @@ $ btid task edit alpha-n0qz --end 2026-11-20 --note "Client moved the review."
 Every write is **one commit**, named after the verb and the row (`capture alpha-n0qz`, `edit alpha-n0qz`). There is no
 autosave and no batch: a verb that succeeds has already written, and a verb that refuses has written nothing.
 
+### Seed a store in three commands
+
+A store is not useful until it has a project, a roster and a dozen tasks, so every `new` takes `--file`: a JSON array of
+items, or `{"items": [...]}`, or `-` for stdin. **One command, one commit**, and `--dry-run` works.
+
+```console
+$ cat projects.json
+[{"id": "alpha", "name": "Alpha One", "startDate": "2026-10-26", "endDate": "2026-11-23"},
+ {"id": "beta",  "name": "Beta Two",  "startDate": "2026-11-02", "endDate": "2026-11-30"}]
+
+$ btid project new --file projects.json
+project  alpha   Alpha One
+project  beta    Beta Two
+2 projects in one commit
+
+$ cat tasks.json
+[{"projectId": "alpha", "title": "Check the header budgets"},
+ {"projectId": "alpha", "title": "Write the failing test", "priority": "urgent"}]
+
+$ btid task new --file tasks.json          # items without a projectId inherit --project
+captured  alpha-n0qz   backlog   Check the header budgets
+captured  alpha-c3d4   backlog   Write the failing test
+2 tasks in one commit
+```
+
+**All or nothing.** The store builds every row first and stages none of them if one item refuses, so a seed that fails on
+item 2 writes nothing at all — and the refusal says which item:
+
+```console
+$ btid task new --file tasks.json --json
+{"error":{"kind":"refused","code":"TITLE_REQUIRED","message":"A task needs a title.","at":2}}
+```
+
+A missing *key* is a usage error (`2`): that is the terminal's shape. A present key with a bad *value* is the store's
+refusal (`1`) in the store's words — `TITLE_REQUIRED`, `PROJECT_MISSING`, `PERSON_EXISTS`.
+
 **Give a project its window, or it cannot take work.** A task needs a project with both dates, so a project created without
 them refuses every capture with `PROJECT_NOT_READY` — deliberately, but a wall if you meet it afterwards. `project edit` is
 the way to add the window later, and it is the same command that renames or re-dates:

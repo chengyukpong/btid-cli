@@ -55,10 +55,11 @@ A field the store starts validating is a field this CLI can name the day it land
 ## Status
 
 **The verbs the core can support are built, and installed.** `task ls|show|new|edit`, `project ls|new|edit`, `person ls|new`,
-`store whoami|init`, `version`, `help` — 26 tests against a real `btid-core` and a real `githubdb` database with only the
+`store whoami|init`, `version`, `help`, and `--file` batch creation on every `new` — 35 tests against a real `btid-core` and a real `githubdb` database with only the
 network replaced. `promote`, `move`, `step`, `comment` and `archive` wait on one core command each; writing the rule here is
 the one thing this project must not do. A project takes its window at creation (`--start --end`) or later (`project edit`),
-because a project without both dates refuses every capture.
+because a project without both dates refuses every capture. Every `new` also takes `--file`: a JSON array seeded in one
+commit, all or nothing, with the refusal naming the item that failed.
 
 ## What it is not
 
