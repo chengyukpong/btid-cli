@@ -247,3 +247,44 @@ promoted  alpha-n7qk   todo   rev 3
 
 A single object is a one-item list, so a script editing exactly one task needs no brackets. Promotion has no file form yet;
 it is one row at a time (`task promote <id>`), which is the next thing to add if seeds of twenty tasks become normal.
+
+## What the run actually showed (2026-11-11T18:55)
+
+Run on the prepared store `chengyukpong/btid-cli-test@main`, as `chengyukpong`, on a task captured for the purpose:
+`alpha-qkka` — *"Header budgets walkthrough (self-test)"*. Ten commands, ten commits, `rev 0 → 9`, `backlog → done`.
+
+**Every refusal in this document happened, in the words it predicted:**
+
+```
+$ btid task edit alpha-qkka --status todo
+refused: Promote the item to move it onto the board. (NOT_ALLOWED)
+
+$ btid task promote alpha-qkka
+refused: Before promotion: add an owner, a start date, an end date, an estimate and a definition of done. (PROMOTION_INCOMPLETE)
+
+$ btid task edit alpha-qkka --end 2026-11-16          # after --tracked on
+refused: Changing the end day of a tracked task needs a reason. (END_DATE_NEEDS_REASON)
+
+$ btid task promote alpha-4k7y                        # an older row, promoted a minute earlier by the operator
+refused: alpha-4k7y is already on the board (todo). Change its status instead of promoting it again. (ALREADY_PROMOTED)
+```
+
+The refusal for a tracked end day exited **1** and wrote nothing; the short-task one (`--small on` with day dates) was not
+re-run here but is the fault path: exit **3**, `INVALID_ROW`.
+
+**One correction to the table above, and it is mine.** The row's own log is **one entry per day**, not one per command: the
+engine collapses a day's changes into its last value per field. After ten commands the row holds a single activity entry for
+`2026-11-11` whose `changes` list every field touched (`assignee`, `startDate`, `endDate`, `definitionOfDone`, `estimateDays`,
+`status`, `percentComplete`, `blocked`, `tracked`), with the note attached where it belongs:
+
+```json
+{"field":"endDate","from":null,"to":"2026-11-16","note":"The header spec slipped a week.","by":"chengyukpong"}
+```
+
+So the two halves of the audit trail answer different questions: **`git log` is per command** (`capture alpha-qkka`,
+`promote alpha-qkka`, eight × `edit alpha-qkka`), and **`activities` is per day** — what the row ended the day as, per field,
+with the reasons kept on the changes that had one.
+
+**Cost, measured on this connection:** the capture was 7.5 s (a cold load plus the commit); each later write 4.9–5.5 s (warm —
+the snapshot was resumed, one tree call to refresh it); each refusal 2.8–2.9 s (a read and a rule, no commit). Ten commands
+took **49 s**, against ~64 s for ten cold writes before the snapshot refresh.
