@@ -1,9 +1,9 @@
 # Make the command fast — at the CLI layer
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-11T17:10:00+08:00
-- **Finished:** —
-- **Approved:** —
+- **Finished:** 2026-11-11T18:56:00+08:00
+- **Approved:** 2026-11-11T19:00:00+08:00
 
 ## The measurement
 

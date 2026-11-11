@@ -1,10 +1,10 @@
 # The terminal front end, verb by verb
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-11T01:36:00+08:00
 - **Started:** 2026-11-11T14:20:00+08:00
-- **Finished:** —
-- **Approved:** —
+- **Finished:** 2026-11-11T18:56:00+08:00
+- **Approved:** 2026-11-11T19:00:00+08:00
 
 ## Description
 
