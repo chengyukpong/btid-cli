@@ -300,11 +300,38 @@ describe('btid', () => {
     assert.equal(client.messages[0], 'capture 1 task')
   })
 
-  it('refuses a file that is one object, and names the two shapes', async () => {
+  it('takes a single object as a one-item list', async () => {
     const path = await batchFile('single.json', { projectId: 'alpha', title: 'One' })
     const code = await btid(['task', 'new', '--file', path])
+    assert.equal(code, 0, lines.text)
+    assert.equal(client.messages[0], 'capture 1 task')
+  })
+
+  it('still prefers the wrapper when an object has an "items" array', async () => {
+    const path = await batchFile('wrapped-two.json', {
+      items: [
+        { projectId: 'alpha', title: 'One' },
+        { projectId: 'alpha', title: 'Two' },
+      ],
+    })
+    const code = await btid(['task', 'new', '--file', path])
+    assert.equal(code, 0, lines.text)
+    assert.equal(client.messages[0], 'capture 2 tasks')
+  })
+
+  it('takes a single edit as one object too', async () => {
+    const path = await batchFile('one-edit.json', { id: 'alpha-a1b2', patch: { percentComplete: 30 } })
+    const code = await btid(['task', 'edit', '--file', path])
+    assert.equal(code, 0, lines.text)
+    assert.equal(client.messages[0], 'edit alpha-a1b2')
+    assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['percentComplete'], 30)
+  })
+
+  it('refuses an empty list, because a file with nothing in it is a mistake', async () => {
+    const path = await batchFile('empty.json', [])
+    const code = await btid(['task', 'new', '--file', path])
     assert.equal(code, 2)
-    assert.match(lines.text, /must be a JSON array of items, or an object with an "items" array/)
+    assert.match(lines.text, /holds no items/)
   })
 
   it('writes nothing with --file and --dry-run', async () => {

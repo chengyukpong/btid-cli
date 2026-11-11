@@ -134,8 +134,10 @@ autosave and no batch: a verb that succeeds has already written, and a verb that
 
 ### Seed a store in three commands
 
-A store is not useful until it has a project, a roster and a dozen tasks, so every `new` takes `--file`: a JSON array of
-items, or `{"items": [...]}`, or `-` for stdin. **One command, one commit**, and `--dry-run` works.
+A store is not useful until it has a project, a roster and a dozen tasks, so every `new` `--file` takes one of three shapes —
+  a JSON array of items, **a single item object** (a one-item list, so a script changing one row needs no brackets), or
+  `{"items": [...]}` — and `-` for stdin. **One command, one commit**, and `--dry-run` works. The same three shapes serve
+  every `edit`.
 
 ```console
 $ cat projects.json

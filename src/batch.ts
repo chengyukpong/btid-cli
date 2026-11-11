@@ -21,8 +21,14 @@ export class BatchError extends Error {
 /**
  * Read a batch from a path, or from stdin for `-`.
  *
- * Accepted shapes: a bare array, or `{"items": [...]}`. Anything else is refused rather than guessed: a file that is one
- * object is a mistake someone will make, and the message says which two shapes exist.
+ * Three shapes, and the third is a courtesy rather than a format:
+ *
+ * - a bare array — the normal case;
+ * - `{"items": [...]}` — the wrapper people reach for when they want a named field;
+ * - **a single object** — treated as a one-item list, because a script that changes exactly one row should not have to
+ *   remember brackets. The wrapper is checked first, so an object *is* a list only when it is not `{"items": …}`.
+ *
+ * An empty array is still refused: a file with nothing in it is a mistake, not a command.
  */
 export function readBatch(path: string): BatchItem[] {
   const text = path === '-' ? readFileSync(0, 'utf8') : readFileSync(path, 'utf8')
@@ -34,16 +40,20 @@ export function readBatch(path: string): BatchItem[] {
     throw new BatchError(`--file ${path} is not JSON: ${error instanceof Error ? error.message : String(error)}`)
   }
 
+  const isObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+
   const list = Array.isArray(parsed)
     ? parsed
-    : typeof parsed === 'object' && parsed !== null && Array.isArray((parsed as { items?: unknown }).items)
-      ? ((parsed as { items: unknown[] }).items as unknown[])
-      : null
+    : isObject(parsed) && Array.isArray(parsed['items'])
+      ? (parsed['items'] as unknown[])
+      : isObject(parsed)
+        ? [parsed]
+        : null
 
   if (list === null) {
     throw new BatchError(
-      `--file ${path} must be a JSON array of items, or an object with an "items" array. ` +
-        'One item is still a one-element array.',
+      `--file ${path} must be a JSON array of items, a single item object, or an object with an "items" array.`,
     )
   }
   if (list.length === 0) throw new BatchError(`--file ${path} holds no items.`)
