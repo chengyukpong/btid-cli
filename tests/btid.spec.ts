@@ -71,6 +71,7 @@ const task = (over: Record<string, unknown> = {}) => ({
 let client: FakeClient
 let lines: Lines
 let workspace: string
+const { join } = require('node:path') as typeof import('node:path')
 
 /** Write a batch file and return its path. */
 const batchFile = async (name: string, body: unknown): Promise<string> => {
@@ -89,6 +90,8 @@ const btid = (argv: string[]) =>
     clientFor: () => client,
     tokenFor: () => 'test-token',
     loginFor: async () => 'chengyukpong',
+    configPath: join(workspace, 'config.json'),
+    cacheDir: workspace,
   })
 
 describe('btid', () => {
@@ -534,6 +537,137 @@ describe('btid', () => {
     assert.match(lines.text, /task fields \(29\)/)
     assert.match(lines.text, /endDate/)
     assert.match(lines.text, /required|optional/)
+  })
+
+  it('remembers the login and skips GET /user the next time', async () => {
+    const { readFileSync } = await import('node:fs')
+    let asked = 0
+    const call = (argv: string[]) =>
+      run({
+        argv: ['--store', 'chengyukpong/btid-data', ...argv],
+        env: { BTID_TOKEN: 'test-token' },
+        out: consoleOutput((text) => lines.write(text)),
+        clientFor: () => client,
+        tokenFor: () => 'test-token',
+        configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+        cacheDir: workspace,
+    cacheDir: workspace,
+        loginFor: async () => {
+          asked += 1
+          return 'chengyukpong'
+        },
+      })
+
+    assert.equal(await call(['store', 'whoami']), 0)
+    assert.equal(asked, 1)
+    const written = JSON.parse(readFileSync(join(workspace, 'config.json'), 'utf8')) as {
+      store: string
+      login: string
+      tokenFingerprint: string
+    }
+    assert.equal(written.login, 'chengyukpong')
+    assert.equal(written.store, 'chengyukpong/btid-data@main')
+    assert.match(written.tokenFingerprint, /^[0-9a-f]{16}$/)
+    assert.doesNotMatch(written.tokenFingerprint, /test-token/, 'the token itself is not stored')
+  })
+
+  it('ignores a cached login that belongs to a different token', async () => {
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(
+      join(workspace, 'config.json'),
+      JSON.stringify({ store: 'chengyukpong/btid-data@main', login: 'someone-else', tokenFingerprint: 'deadbeefdeadbeef' }),
+      'utf8',
+    )
+    let asked = 0
+    const code = await run({
+      argv: ['--store', 'chengyukpong/btid-data', 'store', 'whoami'],
+      env: { BTID_TOKEN: 'test-token' },
+      out: consoleOutput((text) => lines.write(text)),
+      clientFor: () => client,
+      tokenFor: () => 'test-token',
+      configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+    cacheDir: workspace,
+      loginFor: async () => {
+        asked += 1
+        return 'chengyukpong'
+      },
+    })
+    assert.equal(code, 0)
+    assert.equal(asked, 1, 'the stale cache is not trusted')
+  })
+
+  it('answers a second read from the snapshot, with one head request', async () => {
+    const { readdirSync } = await import('node:fs')
+    // The first read loads the store and writes a snapshot beside the config.
+    assert.equal(await btid(['store', 'whoami']), 0)
+    const snapshots = readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json'))
+    assert.equal(snapshots.length, 1, 'one snapshot per store')
+
+    // A client that refuses to list or read blobs: only a resumed store can answer.
+    // Only head() and commit() are usable: a resumed store must not list the branch or read a file.
+    const deaf = {
+      tree: async (): Promise<never> => {
+        throw new Error('the tree was listed')
+      },
+      blob: async (): Promise<never> => {
+        throw new Error('a blob was read')
+      },
+      head: () => client.head(),
+      commit: (files: Parameters<FakeClient['commit']>[0], message: string) => client.commit(files, message),
+      tag: (name: string, sha: string) => client.tag(name, sha),
+      untag: (name: string) => client.untag(name),
+    }
+    const calls: string[] = []
+    lines.written.length = 0
+    const code = await run({
+      argv: ['--store', 'chengyukpong/btid-data', 'task', 'ls'],
+      env: { BTID_TOKEN: 'test-token' },
+      out: consoleOutput((text) => lines.write(text)),
+      clientFor: () => {
+        calls.push('client')
+        return deaf as unknown as FakeClient
+      },
+      tokenFor: () => 'test-token',
+      loginFor: async () => 'chengyukpong',
+      configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+    })
+    assert.equal(code, 0, lines.text)
+    assert.match(lines.text, /Write the failing test/, 'the rows came from the snapshot')
+  })
+
+  it('drops the snapshot when a command writes, so the next read does not serve stale rows', async () => {
+    const { readdirSync } = await import('node:fs')
+    assert.equal(await btid(['store', 'whoami']), 0)
+    assert.equal(readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length, 1)
+
+    assert.equal(await btid(['task', 'new', '--project', 'alpha', '--title', 'After a write']), 0)
+    assert.equal(
+      readdirSync(workspace).filter((name) => name.endsWith('.snapshot.json')).length,
+      0,
+      'a write invalidates it',
+    )
+  })
+
+  it('--fresh ignores the snapshot and writes a new one from a real load', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    assert.equal(await btid(['store', 'whoami']), 0)
+    const path = join(workspace, readdirSync(workspace).find((name) => name.endsWith('.snapshot.json'))!)
+    const before = JSON.parse(readFileSync(path, 'utf8')) as { commit: string }
+
+    client = new FakeClient()
+    client.put('githubdb.json', { schemaVersion: EXPECT })
+    client.put('people.json', { [managerRow.id]: managerRow })
+    client.put('projects/alpha/project.json', { alpha: project })
+    client.put('projects/alpha/tasks.json', {})
+
+    lines.written.length = 0
+    const code = await btid(['task', 'ls', '--fresh'])
+    assert.equal(code, 0, lines.text)
+    assert.match(lines.text, /no rows/, 'it read the new store rather than the snapshot')
+    assert.equal(typeof before.commit, 'string')
   })
 
   it('refuses without a store, naming the three ways to give one', async () => {

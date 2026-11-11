@@ -25,6 +25,24 @@ Three consequences, all worth knowing before operating:
 
 Sign-in needs no setup on this machine: `gh` is signed in, so `BTID_TOKEN` can be left unset.
 
+### Why the second command is fast
+
+The first read in a session pays for the store; the ones after it do not. `btid` keeps a **snapshot** of the rows beside the
+commit they were read at, the same way the SPA keeps one for the next tab. A command then makes **one** request — the branch
+head — and either hydrates the rows it already has or loads the store afresh:
+
+| | requests | time here |
+|---|---|---|
+| first read (cold) | tree + one per file + head | ~3.0 s |
+| second read (snapshot) | head only | ~0.9 s |
+| a write | as before, then the snapshot is dropped | ~6 s |
+
+- `--fresh` ignores the snapshot for one call and writes a new one from a real load.
+- `BTID_NO_CACHE=1` turns it off for a session; `BTID_CACHE_DIR` moves it.
+- **A write drops the snapshot**, because after a commit those rows describe the store *before* it. The next command loads
+  once and re-caches.
+- The commit is a claim, and it is checked against the head every time — a snapshot is never trusted on its own.
+
 ### Which build is answering?
 
 ```console

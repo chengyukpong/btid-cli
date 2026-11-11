@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 /**
  * Where the store is.
@@ -17,6 +18,15 @@ export interface StoreLocation {
 
 export interface Config {
   store: StoreLocation
+  /**
+   * Who the cached token belonged to, and a fingerprint of the token itself.
+   *
+   * `GET /user` is one of the three round trips every command paid for before it could touch the store. A login cannot be
+   * *derived* from a token, so the only way to skip the call is to remember the answer — and the only safe way to remember it
+   * is to remember which token it was the answer for.
+   */
+  login?: string
+  tokenFingerprint?: string
 }
 
 /** `owner/repo` or `owner/repo@branch`. */
@@ -38,14 +48,62 @@ export function readConfigFile(path: string = configPath()): Config | null {
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
     if (typeof parsed !== 'object' || parsed === null) return null
-    const store = (parsed as Record<string, unknown>)['store']
+    const record = parsed as Record<string, unknown>
+    const store = record['store']
     if (typeof store !== 'string') return null
     const location = parseStore(store)
-    return location === null ? null : { store: location }
+    if (location === null) return null
+    const login = typeof record['login'] === 'string' && record['login'] !== '' ? record['login'] : undefined
+    const tokenFingerprint =
+      typeof record['tokenFingerprint'] === 'string' && record['tokenFingerprint'] !== ''
+        ? record['tokenFingerprint']
+        : undefined
+    return {
+      store: location,
+      ...(login === undefined ? {} : { login }),
+      ...(tokenFingerprint === undefined ? {} : { tokenFingerprint }),
+    }
   } catch {
     return null
   }
 }
+
+/** Sixteen hex characters of the token's sha256: enough to tell two tokens apart, useless as a token. */
+export const fingerprintOf = (token: string): string =>
+  createHash('sha256').update(token).digest('hex').slice(0, 16)
+
+/**
+ * Remember who a token belongs to, so the next command can skip `GET /user`.
+ *
+ * Best effort: a config directory that cannot be written (a locked-down machine, a read-only home) must not fail the
+ * command. The cost of not remembering is one request, not a broken CLI.
+ */
+export function rememberLogin(
+  login: string,
+  token: string,
+  store: StoreLocation | null,
+  path: string = configPath(),
+): void {
+  try {
+    const existing = readConfigFile(path)
+    const next = {
+      ...(store === null ? {} : { store: `${store.owner}/${store.repo}@${store.ref}` }),
+      ...(existing !== null && store === null ? { store: `${existing.store.owner}/${existing.store.repo}@${existing.store.ref}` } : {}),
+      login,
+      tokenFingerprint: fingerprintOf(token),
+    }
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+  } catch {
+    // Nothing to do: the login is an optimisation, and the next run will ask GitHub again.
+  }
+}
+
+/** The remembered login, when it was remembered for this exact token. */
+export const cachedLogin = (config: Config | null, token: string): string | null =>
+  config !== null && config.login !== undefined && config.tokenFingerprint === fingerprintOf(token)
+    ? config.login
+    : null
 
 /**
  * Resolve the store from the three sources, in order.
