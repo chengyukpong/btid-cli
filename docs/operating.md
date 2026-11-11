@@ -5,6 +5,25 @@ refusal carries a code, and `btid help --json` is the manifest a program should 
 
 This page is the hand-off. It assumes a repository the operator may write to, and a GitHub token that may write to it.
 
+## 0. How it is installed on this machine (2026-11-11)
+
+`npm install -g .` from this checkout, which makes the `btid` command a **symlink to this directory**:
+
+```
+btid-cli@0.1.0 -> C:\workspace\dsh\btid3\btid-cli
+```
+
+Three consequences, all worth knowing before operating:
+
+- **A change to this checkout is a change to `btid`.** No reinstall needed; `npm run build` here is enough for the CLI's own
+  code, and `npm run build` in `btid-core` for anything the core owns (the CLI resolves it from the checkout's
+  `node_modules`, which points at the core's `dist`).
+- **Moving or deleting the checkout breaks the command.** `npm uninstall -g btid-cli` and reinstall from the new location.
+- **The name was taken.** The previous product, `btid@0.4.0` (the local-app tracker, superseded by `btid2`), was installed
+  globally under the same command. It has been uninstalled, and reinstalling it later would take the name back.
+
+Sign-in needs no setup on this machine: `gh` is signed in, so `BTID_TOKEN` can be left unset.
+
 ## 1. Install it, or run it from the checkout
 
 ```console
