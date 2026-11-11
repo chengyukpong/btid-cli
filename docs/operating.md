@@ -68,7 +68,39 @@ $ btid task edit alpha-n0qz --title "Renamed" --dry-run
 would commit: edit alpha-n0qz
 ```
 
-## 5. Read the answer, not the prose
+## 5. Where the field names come from
+
+There is no hand-kept list, because a hand-kept list is a second definition of what a task is. The fields are read off
+`btid-core`'s own zod schemas by `toJSONSchema()` and published in the manifest:
+
+```console
+$ btid help --json | jq '.types[] | "\(.type): \(.fields | length) fields"'
+task: 29 fields
+project: 13 fields
+person: 6 fields
+
+$ btid help --json | jq '.types[0].fields[] | select(.name == "status")'
+{"name":"status","type":"string","required":true,"values":["backlog","todo","in_progress","done"]}
+```
+
+and the same thing for a person to read:
+
+```console
+$ btid help task
+task fields (29), as the store validates them:
+  id                string      required
+  taskId            string      required
+  projectId         string      required
+  firstPromotedAt   string|null required
+  title             string      required
+  …
+  status            string      required  one of: backlog, todo, in_progress, done
+```
+
+So `--fields endDate,percentComplete` is checkable before the call rather than by failing it, and a field the store starts
+validating is a field you can name the day it lands here.
+
+## 6. Read the answer, not the prose
 
 `--json` prints the core's own object or a refusal as data:
 
@@ -92,7 +124,7 @@ $ btid task edit alpha-a1b2 --end 2026-11-20 --json
 The codes worth branching on today: `END_DATE_NEEDS_REASON`, `TITLE_REQUIRED`, `TASK_NOT_FOUND`, `PROJECT_MISSING`,
 `PROJECT_NOT_READY`, `PERSON_EXISTS`, `NOT_MANAGER`, `NOT_ALLOWED`, `QUERY_INVALID`.
 
-## 6. What an agent must not do
+## 7. What an agent must not do
 
 - **Do not write the store's files yourself.** No `git` commits into the store, no editing `people.json` by hand: the rules
   that make a row valid, the activity log, and the revision are the core's, and a hand-written row is a store that the app
@@ -102,7 +134,7 @@ The codes worth branching on today: `END_DATE_NEEDS_REASON`, `TITLE_REQUIRED`, `
 - **Do not invent a verb.** `btid help --json` lists what exists. `promote`, `step`, `comment` and `archive` are not built
   yet; they wait on `btid-core` commands, and doing them by hand in git is the failure this CLI exists to prevent.
 
-## 7. The manifest
+## 8. The manifest
 
 ```console
 $ btid help --json

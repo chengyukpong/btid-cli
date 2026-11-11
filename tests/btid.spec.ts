@@ -212,6 +212,35 @@ describe('btid', () => {
     assert.deepEqual(manifest.exitCodes, { ok: 0, refused: 1, usage: 2 })
   })
 
+  it('publishes the field list in the manifest, read off the schemas the store validates with', async () => {
+    assert.equal(await btid(['help', '--json']), 0)
+    const manifest = lines.json[0] as {
+      types: { type: string; fields: { name: string; type: string; required: boolean; values?: string[] }[] }[]
+    }
+    const task = manifest.types.find((entry) => entry.type === 'task')!
+    const names = task.fields.map((field) => field.name)
+    // The fields an agent is most likely to ask for, and one that proves the list is the schema's rather than a guess.
+    for (const expected of ['taskId', 'status', 'endDate', 'blocked', 'percentComplete']) {
+      assert.ok(names.includes(expected), `task fields are missing ${expected}`)
+    }
+    assert.equal(names.length, 29, 'the task row has 29 fields')
+    assert.deepEqual(task.fields.find((field) => field.name === 'status')?.values, [
+      'backlog',
+      'todo',
+      'in_progress',
+      'done',
+    ])
+    const person = manifest.types.find((entry) => entry.type === 'person')!
+    assert.ok(person.fields.some((field) => field.name === 'githubHandle'))
+  })
+
+  it('prints a type’s fields with btid help <type>', async () => {
+    assert.equal(await btid(['help', 'task']), 0)
+    assert.match(lines.text, /task fields \(29\)/)
+    assert.match(lines.text, /endDate/)
+    assert.match(lines.text, /required|optional/)
+  })
+
   it('refuses without a store, naming the three ways to give one', async () => {
     const code = await run({ argv: ['task', 'ls'], env: {}, out: consoleOutput((text) => lines.write(text)) })
     assert.equal(code, 2)
