@@ -407,6 +407,14 @@ describe('btid', () => {
     assert.match(lines.text, /INVALID_ROW|not valid v1 data/)
   })
 
+  it('adds a task’s new label to its project, in the same commit', async () => {
+    const code = await btid(['task', 'edit', 'alpha-a1b2', '--labels', 'ui,billing'])
+    assert.equal(code, 0, lines.text)
+    assert.equal(client.messages.length, 1, 'one commit covers the task and the project')
+    assert.deepEqual(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['labels'], ['ui', 'billing'])
+    assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['labels'], ['ui', 'billing'])
+  })
+
   it('clears nullable fields with none', async () => {
     const code = await btid(['task', 'edit', 'alpha-a1b2', '--estimate', 'none', '--labels', 'none', '--blocked-by', 'none'])
     assert.equal(code, 0, lines.text)
