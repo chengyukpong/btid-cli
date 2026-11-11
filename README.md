@@ -54,9 +54,9 @@ A field the store starts validating is a field this CLI can name the day it land
 
 ## Status
 
-**The verbs the core can support are built.** `task ls|show|new|edit`, `project ls|new`, `person ls|new`,
-`store whoami|init`, `help` — 19 tests against a real `btid-core` and a real `githubdb` database with only the network
-replaced. `promote`, `move`, `step`, `comment` and `archive` wait on one core command each; writing the rule here is the
+**The verbs the core can support are built, and installed.** `task ls|show|new|edit`, `project ls|new`, `person ls|new`,
+`store whoami|init`, `version`, `help` — 22 tests against a real `btid-core` and a real `githubdb` database with only the
+network replaced. `promote`, `move`, `step`, `comment` and `archive` wait on one core command each; writing the rule here is the
 one thing this project must not do.
 
 ## What it is not
@@ -70,6 +70,7 @@ If you are a model using this CLI rather than a person reading about it, do not 
 prose goes stale. Ask the binary:
 
 ```
+$ btid version            # which build this is, and which schema it speaks
 $ btid help --json        # every verb, its flags, the row fields, and the exit codes
 $ btid help task          # one type's fields, as a page
 $ btid help task ls       # one verb's usage and flags

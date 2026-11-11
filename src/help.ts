@@ -1,4 +1,5 @@
 import { ProjectSchema, TaskSchema, UserSchema } from 'btid-core'
+import { CLI_VERSION, MANIFEST_VERSION } from './version'
 import { usage, type Verb, type VerbContext } from './verb'
 import { VERBS } from './verbs'
 
@@ -57,9 +58,17 @@ export const TYPES = [
   { type: 'person', fields: fieldsOf(UserSchema) },
 ] as const
 
+/**
+ * The manifest.
+ *
+ * `version` is this CLI's; `manifest` is the shape's. They are separate numbers on purpose: a change to the CLI that adds
+ * a verb moves the first, a change to the manifest that moves a field's meaning moves the second, and a consumer can pin
+ * either without being told the other one moved.
+ */
 export const manifest = (from: readonly Verb[] = VERBS): unknown => ({
   name: 'btid',
-  version: 1,
+  version: CLI_VERSION,
+  manifest: MANIFEST_VERSION,
   verbs: from.map((verb) => ({
     name: verb.name,
     summary: verb.summary,

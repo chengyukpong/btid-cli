@@ -24,6 +24,20 @@ Three consequences, all worth knowing before operating:
 
 Sign-in needs no setup on this machine: `gh` is signed in, so `BTID_TOKEN` can be left unset.
 
+### Which build is answering?
+
+```console
+$ btid version
+btid 0.1.0 · btid-core schema v1 · manifest 1
+
+$ btid version --json
+{"btid":"0.1.0","coreSchema":1,"manifest":1}
+```
+
+Three numbers, and they move for different reasons: the CLI's version moves when a verb is added, `coreSchema` is the store
+version this build speaks (a store at another version is refused, not migrated), and `manifest` is the shape of
+`btid help --json`. A report of a bug should carry this line — it says what the caller believed it was talking to.
+
 ## 1. Install it, or run it from the checkout
 
 ```console

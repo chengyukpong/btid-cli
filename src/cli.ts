@@ -96,7 +96,11 @@ async function connect(
 export async function run(options: RunOptions): Promise<number> {
   const out = options.out ?? consoleOutput()
   const env = options.env ?? process.env
-  const { flags, args } = parseFlags(options.argv)
+  const parsed = parseFlags(options.argv)
+  const flags = parsed.flags
+  // `btid --version` is what a person types first; it is the `version` verb under another name.
+  const args =
+    parsed.args.length === 0 && (flags['version'] === true || flags['v'] === true) ? ['version'] : parsed.args
   const json = flags['json'] === true
 
   const { verb, rest } = findVerbFor(args)
@@ -105,8 +109,8 @@ export async function run(options: RunOptions): Promise<number> {
     return args.length === 0 ? 0 : 2
   }
 
-  // `help` is the way to learn the flags, so it cannot require a store.
-  if (verb.name === 'help') {
+  // `help` and `version` answer questions about the binary, so neither requires a store.
+  if (verb.name === 'help' || verb.name === 'version') {
     try {
       return await verb.run({
         store: undefined as never,

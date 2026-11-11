@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'vitest'
 import { EXPECT } from 'btid-core'
+import { CLI_VERSION } from '../src/version'
 import { run } from '../src/cli'
 import { consoleOutput } from '../src/output'
 import { FakeClient, Lines } from './support'
@@ -212,11 +213,40 @@ describe('btid', () => {
     assert.deepEqual(manifest.exitCodes, { ok: 0, refused: 1, usage: 2 })
   })
 
+  it('says which btid it is, and which schema it speaks', async () => {
+    assert.equal(await btid(['version']), 0)
+    assert.match(lines.text, /^btid \d+\.\d+\.\d+ · btid-core schema v1 · manifest 1/)
+
+    lines.written.length = 0
+    assert.equal(await btid(['version', '--json']), 0)
+    assert.deepEqual(lines.json[0], { btid: CLI_VERSION, coreSchema: EXPECT, manifest: 1 })
+  })
+
+  it('takes --version as the same question, and answers it without a store', async () => {
+    const code = await run({
+      argv: ['--version'],
+      env: {},
+      out: consoleOutput((text) => lines.write(text)),
+    })
+    assert.equal(code, 0)
+    assert.match(lines.text, /^btid \d+\.\d+\.\d+/)
+  })
+
+  it('keeps the version it prints in step with package.json', async () => {
+    const { readFileSync } = await import('node:fs')
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+    assert.equal(CLI_VERSION, pkg.version, 'src/version.ts and package.json must agree')
+  })
+
   it('publishes the field list in the manifest, read off the schemas the store validates with', async () => {
     assert.equal(await btid(['help', '--json']), 0)
     const manifest = lines.json[0] as {
+      version: string
+      manifest: number
       types: { type: string; fields: { name: string; type: string; required: boolean; values?: string[] }[] }[]
     }
+    assert.equal(manifest.version, CLI_VERSION)
+    assert.equal(manifest.manifest, 1)
     const task = manifest.types.find((entry) => entry.type === 'task')!
     const names = task.fields.map((field) => field.name)
     // The fields an agent is most likely to ask for, and one that proves the list is the schema's rather than a guess.

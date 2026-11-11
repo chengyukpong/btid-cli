@@ -1,6 +1,7 @@
-import { BOARD_SORTS } from 'btid-core'
+import { BOARD_SORTS, EXPECT } from 'btid-core'
 import type { BoardSort, Store, Task, TaskHandle } from 'btid-core'
 import { dayOf, describeStore } from './output'
+import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
 import type { Column } from './output'
 import { fieldsOf, printRows, refusal, usage, type Verb, type VerbContext } from './verb'
 
@@ -362,6 +363,21 @@ const storeInit: Verb = {
   },
 }
 
+const version: Verb = {
+  name: 'version',
+  summary: 'Which btid this is, and which schema it speaks.',
+  usage: 'btid version [--json]',
+  async run(context) {
+    const line = versionLine(EXPECT)
+    if (context.json) {
+      context.out.json({ btid: CLI_VERSION, coreSchema: EXPECT, manifest: MANIFEST_VERSION })
+      return 0
+    }
+    context.out.line(line)
+    return 0
+  },
+}
+
 /** The registry: what the parser dispatches on, and what `btid help` reads. */
 export const VERBS: readonly Verb[] = [
   taskLs,
@@ -374,6 +390,7 @@ export const VERBS: readonly Verb[] = [
   personNew,
   storeWhoami,
   storeInit,
+  version,
 ]
 
 export const findVerb = (name: string): Verb | undefined => VERBS.find((verb) => verb.name === name)
