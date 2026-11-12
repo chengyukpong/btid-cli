@@ -27,6 +27,18 @@ export interface VerbContext {
    * the one moment the cache can be refreshed for free.
    */
   committed?: string | null
+  /**
+   * What the step produced, set by the verb itself: the row a create or edit wrote, the row a removal removed.
+   *
+   * This is what `let` binds in a plan — a result, not an id — so `$task.id` reads a field of a real row rather than a string
+   * the plan invented.
+   */
+  result?: unknown
+  /**
+   * Set by a plan running with `--commit=end`: the commit is not made, its message is kept here, and one commit carries them
+   * all when the last step succeeds.
+   */
+  defer?: string[]
   /** Whatever followed the verb, positionally. */
   args: readonly string[]
   /** `--flag value`, `--flag=value`, and bare `--flag` as `true`. */

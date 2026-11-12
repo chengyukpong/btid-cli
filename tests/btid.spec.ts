@@ -463,6 +463,136 @@ describe('btid', () => {
     assert.equal(client.messages.at(-1), 'remove person idle')
   })
 
+
+  /** Write a plan file in the workspace and return its path. */
+  const planFile = async (name: string, body: string): Promise<string> => {
+    const { writeFile } = await import('node:fs/promises')
+    const path = join(workspace, name)
+    await writeFile(path, body, 'utf8')
+    return path
+  }
+
+  it('runs a plan of commands, threading ids from one step into the next', async () => {
+    const path = await planFile(
+      'seed.btid',
+      [
+        '# a store, one row at a time',
+        'let ivan  = person new ivan --name Ivan',
+        'let gamma = project new gamma "Gamma" --start 2026-11-03 --end 2026-12-18',
+        'let task  = task new --project $gamma.id --title "First task"',
+        '            task edit $task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
+        '            task promote $task.id',
+      ].join('\n'),
+    )
+
+    const code = await btid(['plan', path])
+    assert.equal(code, 0, lines.text)
+
+    const row = Object.values(client.json('projects/gamma/tasks.json'))[0] as Record<string, unknown>
+    assert.equal(row['title'], 'First task')
+    assert.equal(row['assigneeId'], 'ivan', 'the person id came from $ivan.id')
+    assert.equal(row['status'], 'todo', 'and promotion used $task.id')
+    assert.equal(row['estimateDays'], 2)
+
+    // One commit per write: person, project, capture, edit, promote.
+    assert.equal(client.messages.length, 5, client.messages.join(' / '))
+    assert.match(client.messages[0]!, /add person ivan/)
+    assert.match(client.messages[1]!, /create project gamma/)
+    assert.match(client.messages[4]!, /promote /)
+    assert.match(lines.text, /5 steps, 5 ran, 0 refused/)
+  })
+
+  it('writes once for the whole plan with --commit=end', async () => {
+    const path = await planFile(
+      'two.btid',
+      [
+        'let gamma = project new gamma "Gamma" --start 2026-11-03 --end 2026-12-18',
+        'let task  = task new --project $gamma.id --title "Only one"',
+        '            task edit $task.id --assignee chengyukpong --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
+        '            task promote $task.id',
+      ].join('\n'),
+    )
+
+    assert.equal(await btid(['plan', path, '--commit=end']), 0, lines.text)
+    assert.equal(client.messages.length, 1, 'one commit carries all four steps: ' + client.messages.join(' / '))
+    assert.match(client.messages[0]!, /create project gamma/)
+    assert.match(client.messages[0]!, /promote /)
+  })
+
+  it('stops at the step that refuses, and says nothing was written when it was deferring', async () => {
+    const path = await planFile(
+      'bad.btid',
+      [
+        'let gamma = project new gamma "Gamma" --start 2026-11-03 --end 2026-12-18',
+        '            project new gamma "Gamma again" --start 2026-11-03 --end 2026-12-18',
+      ].join('\n'),
+    )
+
+    const deferred = await btid(['plan', path, '--commit=end'])
+    assert.equal(deferred, 1, lines.text)
+    assert.match(lines.text, /nothing was written/)
+    assert.equal(client.messages.length, 0, 'a deferred plan that fails writes nothing at all')
+
+    lines.written.length = 0
+    const each = await btid(['plan', path])
+    assert.equal(each, 1)
+    assert.match(lines.text, /PROJECT_EXISTS/)
+    assert.equal(client.messages.length, 1, 'the step before the refusal is already committed')
+  })
+
+  it('refuses to read a reference as a value', async () => {
+    const path = await planFile(
+      'bare.btid',
+      ['let task = task new --project alpha --title "x"', '            task show $task'].join('\n'),
+    )
+    // The bare reference is a plan-check failure: nothing runs, and the message names what to write instead.
+    assert.equal(await btid(['plan', path]), 2, lines.text)
+    assert.match(lines.text, /is a result, not a value — write \$task\.id/)
+    assert.equal(client.messages.length, 0, 'nothing ran')
+  })
+
+  it('refuses a step that reports rather than acts, and a field the row does not have', async () => {
+    const listing = await planFile('list.btid', 'task ls')
+    assert.equal(await btid(['plan', listing]), 2)
+    assert.match(lines.text, /is a report/)
+
+    lines.written.length = 0
+    const field = await planFile(
+      'field.btid',
+      ['let task = task new --project alpha --title "x"', '            task show $task.nope'].join('\n'),
+    )
+    assert.equal(await btid(['plan', field]), 2)
+    assert.match(lines.text, /has no field “nope”/)
+  })
+
+  it('runs a plan written as JSON, with the same references', async () => {
+    const path = await planFile(
+      'seed.json',
+      JSON.stringify({
+        about: 'json form',
+        steps: [
+          { let: 'task', verb: 'task new', flags: { project: 'alpha', title: 'From JSON' } },
+          {
+            verb: 'task edit',
+            args: [{ $ref: 'task.id' }],
+            flags: {
+              assignee: 'chengyukpong',
+              start: '2026-11-09',
+              end: '2026-11-13',
+              estimate: 2,
+              dod: 'Done.',
+            },
+          },
+          { verb: 'task promote', args: [{ $ref: 'task.id' }] },
+        ],
+      }),
+    )
+    assert.equal(await btid(['plan', path]), 0, lines.text)
+    const rows = Object.values(client.json('projects/alpha/tasks.json')) as Record<string, unknown>[]
+    const created = rows.find((row) => row['title'] === 'From JSON')!
+    assert.equal(created['status'], 'todo')
+  })
+
   it('refuses a member adding a project, in the manager’s words', async () => {
     client.put('people.json', { ...{ [managerRow.id]: { ...managerRow, role: 'member' } } })
     const code = await btid(['project', 'new', 'beta', 'Beta'])

@@ -153,6 +153,46 @@ captured  alpha-c3d4   backlog   Write the failing test
 verb that runs a sequence is `plan` — designed, not yet built. Until it exists, seeding a store is one command per row, and the
 core still holds the batch form (`createTasks`, `updateTasks`, …) for whoever builds that.
 
+### A plan runs a file of commands
+
+One file, one process, one store. A plan is a list of steps run in order — create, edit, delete, and `show` — with the id a
+step produced usable by the next one:
+
+```
+# seed.btid
+let ivan  = person new ivan --name Ivan
+let gamma = project new gamma "Gamma" --start 2026-11-03 --end 2026-12-18
+let task  = task new --project $gamma.id --title "First task"
+            task edit $task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."
+            task promote $task.id
+```
+
+```console
+$ btid plan seed.btid
+ok   1  person new
+ok   2  project new
+ok   3  task new
+ok   4  task edit
+ok   5  task promote
+5 steps, 5 ran, 0 refused
+```
+
+- **`let <name> =`** binds the step's **result**, not an id: `$task.id` reads a field, `$task` alone is refused
+  (*"is a result, not a value — write $task.id"*), and a field the row does not have is refused with the list of the ones it does.
+- **A line is `verb args flags`,** parsed by the same flag parser the terminal uses. `#` comments, blank lines ignored, and
+  shell syntax — `&&`, `|`, `;`, `>`, `$(…)`, `$ENV` — refused **by name**, because a file that looks like a shell script and
+  is not one is worse than either.
+- **The plan is checked before anything runs:** an unknown verb, an unknown flag, a bare reference, or a step that only reports
+  (`task ls`) fails with exit `2` and no request.
+- **`--commit=each`** (the default) commits per step, so progress is real and a refusal leaves what already happened;
+  **`--commit=end`** writes once, so a failure leaves the store untouched — the summary says *"nothing was written"*.
+- One identity: the token's. There is no `--as`, and a step that would change who is asking is refused.
+- `--dry-run` prints the steps and runs nothing (not even a `show`); `--quiet` reduces the transcript; `--json` emits the steps
+  and their results.
+
+The same file may be JSON — `{"steps": [{"let": "task", "verb": "task new", "flags": {…}}, {"verb": "task promote", "args": [{"$ref": "task.id"}]}]}`
+— which is what a machine generating a plan should write.
+
 ### Every editable field has a flag
 
 Nothing is settable only by editing JSON. The three `edit` verbs cover the three rows:

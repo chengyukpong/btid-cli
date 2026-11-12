@@ -1,5 +1,6 @@
 import { BOARD_SORTS, EXPECT } from 'btid-core'
 import type { BoardSort, CreateProjectInput, CreateTaskInput, Store, Task, TaskHandle } from 'btid-core'
+import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
 import { dayOf, describeStore } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
@@ -58,6 +59,11 @@ const stringFlag = (flags: VerbContext['flags'], name: string): string | null =>
 async function commit(context: VerbContext, message: string): Promise<number | null> {
   if (context.flags['dry-run'] === true) {
     context.out.line(`would commit: ${message}`)
+    return null
+  }
+  // A plan with --commit=end keeps the message and writes once, at the end.
+  if (context.defer !== undefined) {
+    context.defer.push(message)
     return null
   }
   context.committed = await context.store.commit(message)
@@ -132,6 +138,7 @@ const taskShow: Verb = {
       )
     }
 
+    context.result = row
     if (context.json) {
       context.out.json({ ...row, steps: handle.steps, warnings: handle.warnings.map((warning) => warning.message) })
       return 0
@@ -179,6 +186,7 @@ const taskNew: Verb = {
     const committed = await commit(context, `capture ${row.id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`captured  ${row.id}   ${row.status}   ${row.title}`)
     return 0
@@ -207,6 +215,7 @@ const taskPromote: Verb = {
     const committed = await commit(context, `promote ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = result.value
     if (context.json) context.out.json(result.value)
     else context.out.line(`promoted  ${result.value.taskId}   ${result.value.status}   rev ${result.value.rev}`)
     return 0
@@ -265,6 +274,7 @@ const taskEdit: Verb = {
     const committed = await commit(context, `edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`edited  ${row.taskId}   rev ${row.rev}`)
     return 0
@@ -395,6 +405,7 @@ const projectNew: Verb = {
     const committed = await commit(context, `create project ${row.id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`project  ${row.id}   ${row.name}`)
     return 0
@@ -435,6 +446,7 @@ const projectEdit: Verb = {
     const committed = await commit(context, `project edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`edited  ${row.id}   ${row.name}`)
     return 0
@@ -518,6 +530,7 @@ const personNew: Verb = {
     const committed = await commit(context, `add person ${row.id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`person  ${row.id}   ${row.displayName}   ${row.role}`)
     return 0
@@ -548,6 +561,7 @@ const personEdit: Verb = {
     const committed = await commit(context, `person edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = row
     if (context.json) context.out.json(row)
     else context.out.line(`edited  ${row.id}   ${row.displayName}   ${row.role}${row.active ? '' : ' (inactive)'}`)
     return 0
@@ -598,6 +612,7 @@ const taskRemove: Verb = {
     const committed = await commit(context, `remove ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = result.value
     if (context.json) context.out.json(result.value)
     else context.out.line(`removed  ${result.value.taskId}   ${result.value.title}`)
     return 0
@@ -623,6 +638,7 @@ const projectRemove: Verb = {
     const committed = await commit(context, `remove project ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = result.value
     const { project, tasks } = result.value
     if (context.json) context.out.json({ project, tasks })
     else {
@@ -651,6 +667,7 @@ const personRemove: Verb = {
     const committed = await commit(context, `remove person ${id}`)
     if (committed !== null && committed !== 0) return committed
 
+    context.result = result.value
     if (context.json) context.out.json(result.value)
     else context.out.line(`removed  ${result.value.id}   ${result.value.displayName}`)
     return 0
@@ -673,6 +690,7 @@ const projectShow: Verb = {
     }
 
     const tasks = handle.tasks()
+    context.result = row
     if (context.json) {
       context.out.json({ ...row, tasks: tasks.total })
       return 0
@@ -711,6 +729,84 @@ const personShow: Verb = {
     context.out.line(`  handle @${row.githubHandle}   role ${row.role}${row.active ? '' : '   inactive'}`)
     context.out.line(`  tasks ${tasks.total}`)
     return 0
+  },
+}
+
+const plan: Verb = {
+  name: 'plan',
+  summary: 'Run a file of commands, in order, against one store.',
+  usage:
+    'btid plan <file|-> [--commit=each|end] [--continue] [--quiet] [--dry-run] [--json]',
+  flags: { commit: 'value', continue: 'boolean', quiet: 'boolean', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const file = context.args[0]
+    if (file === undefined) return usage('btid plan <file|-> [--commit=each|end]', context.out, context.json)
+
+    const commitFlag = stringFlag(context.flags, 'commit') ?? 'each'
+    if (commitFlag !== 'each' && commitFlag !== 'end') {
+      return usage(`--commit “${commitFlag}” is not one of each, end`, context.out, context.json)
+    }
+
+    let stdin = ''
+    if (file === '-') {
+      stdin = await new Promise<string>((resolve, reject) => {
+        let text = ''
+        process.stdin.setEncoding('utf8')
+        process.stdin.on('data', (chunk) => (text += chunk))
+        process.stdin.on('end', () => resolve(text))
+        process.stdin.on('error', reject)
+      })
+    }
+
+    let parsed: ReturnType<typeof readPlan>
+    try {
+      parsed = readPlan(file, stdin)
+    } catch (error) {
+      return usage(`the plan could not be read: ${(error as Error).message}`, context.out, context.json)
+    }
+    if ('message' in parsed) return usage(parsed.message, context.out, context.json)
+    if (parsed.steps.length === 0) return usage('that plan has no steps', context.out, context.json)
+
+    if (context.flags['dry-run'] === true) {
+      for (const step of parsed.steps) {
+        const name = step.name === undefined ? '' : `let ${step.name} = `
+        const flags = Object.entries(step.flags)
+          .map(([flag, value]) => (value === true ? `--${flag}` : `--${flag} ${String(value)}`))
+          .join(' ')
+        context.out.line(`${String(step.at).padStart(2)}  ${name}${step.verb} ${[...step.args, flags].filter((part) => part !== '').join(' ')}`.trimEnd())
+      }
+      context.out.line(`${parsed.steps.length} steps, nothing run`)
+      return 0
+    }
+
+    const run = await runPlan(context, parsed, {
+      commit: commitFlag,
+      keepGoing: context.flags['continue'] === true,
+    })
+
+    if (!context.flags['quiet'] === true || !context.json) {
+      // The transcript, one line per step: what ran, and what it produced.
+      for (const step of run.steps) {
+        if (context.json) continue
+        context.out.line(`${step.ok ? 'ok  ' : 'no  '}${String(step.at).padStart(2)}  ${step.verb}`)
+      }
+    }
+
+    if (context.json) {
+      context.out.json({ ok: run.code === 0, steps: run.steps, ...(run.code === 0 ? {} : { code: run.code }) })
+      return run.code
+    }
+
+    const written = run.steps.filter((step) => step.ok).length
+    const refused = run.steps.length - written
+    const nothingWritten = commitFlag === 'end' && refused > 0
+    context.out.line(
+      `${parsed.steps.length} ${parsed.steps.length === 1 ? 'step' : 'steps'}, ${written} ran, ${refused} ${
+        refused === 1 ? 'refused' : 'refused'
+      }${nothingWritten ? ' — nothing was written' : ''}`,
+    )
+    return run.code
   },
 }
 
@@ -843,6 +939,7 @@ export const VERBS: readonly Verb[] = [
   personNew,
   personEdit,
   personRemove,
+  plan,
   storeWhoami,
   storeInit,
   cacheShow,
@@ -851,3 +948,11 @@ export const VERBS: readonly Verb[] = [
 ]
 
 export const findVerb = (name: string): Verb | undefined => VERBS.find((verb) => verb.name === name)
+
+/** A step a plan may run: a verb that writes, a `show`, or `whoami` — and nothing that lists. */
+const PLAN_READS = new Set(['task show', 'project show', 'person show', 'store whoami'])
+
+export const isPlanStep = (name: string): boolean => {
+  const verb = findVerb(name)
+  return verb !== undefined && (verb.writes === true || PLAN_READS.has(name))
+}

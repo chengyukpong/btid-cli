@@ -37,6 +37,7 @@ export class FakeClient implements StoreClient {
       commitSha,
       parentSha: 'c0',
       written: changes.filter((change) => change.content !== null).map((change) => change.path),
+      blobs: changes.filter((change) => change.content !== null).map((change) => [change.path, change.path] as const),
       deleted: changes.filter((change) => change.content === null).map((change) => change.path),
     }
   }
