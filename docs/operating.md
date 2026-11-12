@@ -168,13 +168,13 @@ let task  = task new --project $gamma.id --title "First task"
 ```
 
 ```console
-$ btid plan seed.btid
+$ btid plan seed.btid                 # one commit for all five steps
 ok   1  person new
 ok   2  project new
 ok   3  task new
 ok   4  task edit
 ok   5  task promote
-5 steps, 5 ran, 0 refused
+5 steps, 5 ok, 0 refused
 ```
 
 - **`let <name> =`** binds the step's **result**, not an id: `$task.id` reads a field, `$task` alone is refused
@@ -184,8 +184,11 @@ ok   5  task promote
   is not one is worse than either.
 - **The plan is checked before anything runs:** an unknown verb, an unknown flag, a bare reference, or a step that only reports
   (`task ls`) fails with exit `2` and no request.
-- **`--commit=each`** (the default) commits per step, so progress is real and a refusal leaves what already happened;
-  **`--commit=end`** writes once, so a failure leaves the store untouched — the summary says *"nothing was written"*.
+- **One commit for the whole plan — that is the default.** A plan is one intention, and a store half-built by an intention
+  that failed is worse than one that was never touched: a refusal anywhere means *"nothing was written"*, and the plan can be
+  fixed and re-run.
+  **`--commit=each`** is the opt-in for watching a long plan land step by step: progress is real, and a refusal leaves what
+  already happened.
 - One identity: the token's. There is no `--as`, and a step that would change who is asking is refused.
 - `--dry-run` prints the steps and runs nothing (not even a `show`); `--quiet` reduces the transcript; `--json` emits the steps
   and their results.

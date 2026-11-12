@@ -197,8 +197,9 @@ context's deferral flag so each verb's commit becomes a recorded message, and on
 
 ## Open questions, for the design to settle before code
 
-1. **Default commit policy.** `each` is safer to reason about; `end` is the speed win and matches "a seed is one commit".
-   I would keep `each` as the default and make `--commit=end` explicit, so nobody gets all-or-nothing by accident.
+1. **Default commit policy — settled: `end`.** The first answer was `each`, on the theory that partial progress is easier to
+   inspect. The user's call was better: a plan is *one intention*, so a store half-built by an intention that failed is worse
+   than one that was never touched. `--commit=each` remains the opt-in for watching a long plan land step by step.
 2. **`--continue` or stop?** Stop is the default. A plan is a story; continuing past a failed step usually means editing rows
    that were never created.
 3. **Where do plan files live?** Anywhere (`btid plan ./x.json`, `-` for stdin). A plan is not part of the store; it is a

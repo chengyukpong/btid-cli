@@ -734,18 +734,19 @@ const personShow: Verb = {
 
 const plan: Verb = {
   name: 'plan',
-  summary: 'Run a file of commands, in order, against one store.',
-  usage:
-    'btid plan <file|-> [--commit=each|end] [--continue] [--quiet] [--dry-run] [--json]',
+  summary: 'Run a file of commands in order against one store, committing once at the end.',
+  usage: 'btid plan <file|-> [--commit=end|each] [--continue] [--quiet] [--dry-run] [--json]',
   flags: { commit: 'value', continue: 'boolean', quiet: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const file = context.args[0]
     if (file === undefined) return usage('btid plan <file|-> [--commit=each|end]', context.out, context.json)
 
-    const commitFlag = stringFlag(context.flags, 'commit') ?? 'each'
+    // The default is one commit for the whole plan: a plan is one intention, and a store half-built by an intention that
+    // failed is worse than one that was never touched. `each` is the opt-in for watching a long plan land step by step.
+    const commitFlag = stringFlag(context.flags, 'commit') ?? 'end'
     if (commitFlag !== 'each' && commitFlag !== 'end') {
-      return usage(`--commit “${commitFlag}” is not one of each, end`, context.out, context.json)
+      return usage(`--commit “${commitFlag}” is not one of end, each`, context.out, context.json)
     }
 
     let stdin = ''
@@ -785,27 +786,22 @@ const plan: Verb = {
       keepGoing: context.flags['continue'] === true,
     })
 
-    if (!context.flags['quiet'] === true || !context.json) {
-      // The transcript, one line per step: what ran, and what it produced.
-      for (const step of run.steps) {
-        if (context.json) continue
-        context.out.line(`${step.ok ? 'ok  ' : 'no  '}${String(step.at).padStart(2)}  ${step.verb}`)
-      }
-    }
-
     if (context.json) {
       context.out.json({ ok: run.code === 0, steps: run.steps, ...(run.code === 0 ? {} : { code: run.code }) })
       return run.code
     }
 
-    const written = run.steps.filter((step) => step.ok).length
-    const refused = run.steps.length - written
+    const ok = run.steps.filter((step) => step.ok).length
+    const refused = run.steps.length - ok
+    const notRun = parsed.steps.length - run.steps.length
     const nothingWritten = commitFlag === 'end' && refused > 0
-    context.out.line(
-      `${parsed.steps.length} ${parsed.steps.length === 1 ? 'step' : 'steps'}, ${written} ran, ${refused} ${
-        refused === 1 ? 'refused' : 'refused'
-      }${nothingWritten ? ' — nothing was written' : ''}`,
-    )
+    const parts = [
+      `${parsed.steps.length} ${parsed.steps.length === 1 ? 'step' : 'steps'}`,
+      `${ok} ok`,
+      `${refused} refused`,
+      ...(notRun > 0 ? [`${notRun} not run`] : []),
+    ]
+    context.out.line(`${parts.join(', ')}${nothingWritten ? ' — nothing was written' : ''}`)
     return run.code
   },
 }

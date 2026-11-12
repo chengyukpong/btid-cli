@@ -506,15 +506,14 @@ describe('btid', () => {
     assert.equal(row['status'], 'todo', 'and promotion used $task.id')
     assert.equal(row['estimateDays'], 2)
 
-    // One commit per write: person, project, capture, edit, promote.
-    assert.equal(client.messages.length, 5, client.messages.join(' / '))
+    // One commit for the whole plan, unless --commit=each asks for the step-by-step story.
+    assert.equal(client.messages.length, 1, 'one commit: ' + client.messages.join(' / '))
     assert.match(client.messages[0]!, /add person ivan/)
-    assert.match(client.messages[1]!, /create project gamma/)
-    assert.match(client.messages[4]!, /promote /)
-    assert.match(lines.text, /5 steps, 5 ran, 0 refused/)
+    assert.match(client.messages[0]!, /promote /)
+    assert.match(lines.text, /5 steps, 5 ok, 0 refused/)
   })
 
-  it('writes once for the whole plan with --commit=end', async () => {
+  it('writes per step when --commit=each is asked for', async () => {
     const path = await planFile(
       'two.btid',
       [
@@ -525,13 +524,13 @@ describe('btid', () => {
       ].join('\n'),
     )
 
-    assert.equal(await btid(['plan', path, '--commit=end']), 0, lines.text)
-    assert.equal(client.messages.length, 1, 'one commit carries all four steps: ' + client.messages.join(' / '))
+    assert.equal(await btid(['plan', path, '--commit=each']), 0, lines.text)
+    assert.equal(client.messages.length, 4, 'one per step: ' + client.messages.join(' / '))
     assert.match(client.messages[0]!, /create project gamma/)
-    assert.match(client.messages[0]!, /promote /)
+    assert.match(client.messages[3]!, /promote /)
   })
 
-  it('stops at the step that refuses, and says nothing was written when it was deferring', async () => {
+  it('stops at the step that refuses, and says nothing was written by default', async () => {
     const path = await planFile(
       'bad.btid',
       [
@@ -540,16 +539,16 @@ describe('btid', () => {
       ].join('\n'),
     )
 
-    const deferred = await btid(['plan', path, '--commit=end'])
+    const deferred = await btid(['plan', path])
     assert.equal(deferred, 1, lines.text)
     assert.match(lines.text, /nothing was written/)
-    assert.equal(client.messages.length, 0, 'a deferred plan that fails writes nothing at all')
+    assert.equal(client.messages.length, 0, 'a plan that fails writes nothing at all')
 
     lines.written.length = 0
-    const each = await btid(['plan', path])
+    const each = await btid(['plan', path, '--commit=each'])
     assert.equal(each, 1)
     assert.match(lines.text, /PROJECT_EXISTS/)
-    assert.equal(client.messages.length, 1, 'the step before the refusal is already committed')
+    assert.equal(client.messages.length, 1, 'with --commit=each the step before the refusal is already committed')
   })
 
   it('refuses to read a reference as a value', async () => {

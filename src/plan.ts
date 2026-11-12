@@ -340,7 +340,11 @@ export async function runPlan(
     }
 
     const ok = stepCode === 0
+    const position = results.length + 1
     if (!ok) for (const text of buffer) context.out.line(text)
+    if (!context.json && !context.flags['quiet']) {
+      context.out.line(`${ok ? 'ok  ' : 'no  '}${String(position).padStart(2)}  ${step.verb}${ok ? '' : `   (${stepCode === 2 ? 'usage' : 'refused'})`}`)
+    }
     results.push({ at: step.at, verb: step.verb, ok, code: stepCode })
     if (ok && step.name !== undefined) bindings.set(step.name, child.result)
     if (!ok) {
@@ -349,7 +353,7 @@ export async function runPlan(
     }
     if (isRead && !context.json && isReadOutput(step.verb)) {
       // The verb printed the row; keep the transcript readable by saying which step printed it.
-      context.out.line(`  (step ${step.at})`)
+      context.out.line(`  (step ${position})`)
     }
   }
 
