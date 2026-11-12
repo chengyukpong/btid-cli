@@ -66,12 +66,13 @@ A field the store starts validating is a field this CLI can name the day it land
 
 ## Status
 
-**The verbs the core can support are built, and installed.** `task ls|show|new|edit`, `project ls|new|edit`, `person ls|new|edit`,
-`store whoami|init`, `version`, `help`, and `--file` batch creation on every `new` — 48 tests against a real `btid-core` and a real `githubdb` database with only the
-network replaced. `promote`, `move`, `step`, `comment` and `archive` wait on one core command each; writing the rule here is
-the one thing this project must not do. A project takes its window at creation (`--start --end`) or later (`project edit`),
-because a project without both dates refuses every capture. Every `new` also takes `--file`: a JSON array seeded in one
-commit, all or nothing, with the refusal naming the item that failed.
+**Every row type can be created, changed, shown and deleted.** `task ls|show|new|edit|promote|remove`,
+`project ls|show|new|edit|remove`, `person ls|show|new|edit|remove`, `store whoami|init`, `cache show|clear`, `version`,
+`help` — 21 verbs, 57 tests against a real `btid-core` and a real `githubdb` database with only the network replaced.
+`step`, `comment` and `archive` wait on one core command each; writing the rule here is the one thing this project must not
+do. A project takes its window at creation (`--start --end`) or later (`project edit`), because a project without both dates
+refuses every capture. A verb changes **one row** and commits once; a sequence of rows is a plan’s job, which is designed
+(`tasks/backlog/a-plan-that-runs-many-commands.md`) and not yet built.
 
 ## What it is not
 

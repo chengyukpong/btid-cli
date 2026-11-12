@@ -25,9 +25,10 @@ This is the **Command pattern at the CLI's edge**: the verbs already are command
 one registry), so what is missing is the *invoker* — something that reads a list of them, in order, against one opened store,
 and reports what happened. No rule moves into the plan file; a step is a call, never a condition.
 
-It is also the missing half of the speed work: `--file` batches *one creator over many rows*; a plan runs *many verbs over one
-store*, which is the only way to stop paying the ~2.5 s fixed cost per command. The edits' own `--file` was removed for this
-reason — a list of changes in sequence is a plan, not a second list format on `edit`.
+It is also the missing half of the speed work, and the only remaining list shape: the `--file` flags on the creators and the
+editors were removed while this was being designed (0.7.0 and 0.8.0), because a list of changes in sequence is a plan rather
+than a second format on every verb. A plan runs *many verbs over one store*, which is the only way to stop paying the ~2.5 s
+fixed cost per command.
 
 ## The file
 
@@ -61,7 +62,7 @@ Rules for the file, and they are the whole of its grammar:
   `$person.id` is a person's slug. One segment, a field the row actually has, resolved against **the row the step returned** —
   no nesting, no arithmetic, no functions. A field that does not exist is a failure **at the step that names it, before that
   step's request**, listing the fields the row does have (the same courtesy `--fields` gives).
-- A **single object** instead of `steps` is a one-step plan, matching `--file`'s courtesy.
+- A **single object** instead of `steps` is a one-step plan.
 
 ## What a binding holds
 

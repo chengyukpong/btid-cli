@@ -132,43 +132,26 @@ $ btid task edit alpha-n0qz --end 2026-11-20 --note "Client moved the review."
 Every write is **one commit**, named after the verb and the row (`capture alpha-n0qz`, `edit alpha-n0qz`). There is no
 autosave and no batch: a verb that succeeds has already written, and a verb that refuses has written nothing.
 
-### Seed a store in three commands
+### Seed a store one row at a time
 
-A store is not useful until it has a project, a roster and a dozen tasks, so every `new` takes `--file`: one of three shapes —
-  a JSON array of items, **a single item object** (a one-item list, so a script changing one row needs no brackets), or
-  `{"items": [...]}` — and `-` for stdin. **One command, one commit**, and `--dry-run` works. The same three shapes serve
-  every `edit`.
+A store is not useful until it has a project, a roster and a dozen tasks, and every one of them is a command:
 
 ```console
-$ cat projects.json
-[{"id": "alpha", "name": "Alpha One", "startDate": "2026-10-26", "endDate": "2026-11-23"},
- {"id": "beta",  "name": "Beta Two",  "startDate": "2026-11-02", "endDate": "2026-11-30"}]
-
-$ btid project new --file projects.json
+$ btid project new alpha "Alpha One" --start 2026-10-26 --end 2026-11-23
 project  alpha   Alpha One
-project  beta    Beta Two
-2 projects in one commit
 
-$ cat tasks.json
-[{"projectId": "alpha", "title": "Check the header budgets"},
- {"projectId": "alpha", "title": "Write the failing test", "priority": "urgent"}]
+$ btid person new ivan --name Ivan
+person  ivan   Ivan   member
 
-$ btid task new --file tasks.json          # items without a projectId inherit --project
+$ btid task new --project alpha --title "Check the header budgets"
 captured  alpha-n0qz   backlog   Check the header budgets
+$ btid task new --project alpha --title "Write the failing test" --priority urgent
 captured  alpha-c3d4   backlog   Write the failing test
-2 tasks in one commit
 ```
 
-**All or nothing.** The store builds every row first and stages none of them if one item refuses, so a seed that fails on
-item 2 writes nothing at all — and the refusal says which item:
-
-```console
-$ btid task new --file tasks.json --json
-{"error":{"kind":"refused","code":"TITLE_REQUIRED","message":"A task needs a title.","at":2}}
-```
-
-A missing *key* is a usage error (`2`): that is the terminal's shape. A present key with a bad *value* is the store's
-refusal (`1`) in the store's words — `TITLE_REQUIRED`, `PROJECT_MISSING`, `PERSON_EXISTS`.
+**One row, one command, one commit.** There is no `--file` anywhere in this CLI: a list of changes is a *sequence*, and the
+verb that runs a sequence is `plan` — designed, not yet built. Until it exists, seeding a store is one command per row, and the
+core still holds the batch form (`createTasks`, `updateTasks`, …) for whoever builds that.
 
 ### Every editable field has a flag
 
@@ -198,8 +181,9 @@ A person who has left is **deactivated** (`person edit --active off`), not delet
 an owner would leave rows naming a ghost. And the two reads a plan uses to reuse an existing row exist too — `project show <id>`,
 `person show <id|handle>` — alongside `task show`.
 
-**An `edit` changes one row.** `--file` belongs to the three `new` verbs — many rows of one type, one commit — and an edit
-takes an id and its fields. Changing several rows is what a plan is for; until it exists, that is one command each.
+**Every verb changes one row.** An edit takes an id and its fields, a creation takes one row's worth of flags, and there is no
+list form on any of them: several changes in sequence are what `plan` will do, and a second list format on the verbs was a
+dialect pretending to be a feature.
 
 `none` clears a nullable field (`--estimate none`, `--labels none`, `--start none`). On/off flags take `on` or `off` — a bare
 flag cannot say whether you meant to set or clear.

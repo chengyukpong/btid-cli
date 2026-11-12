@@ -25,7 +25,8 @@ Two of them are period-ends (archive, delete); two are the middle of the work (s
       row's log like any other change.
 - [ ] **`task comment <id> --text`** — the one change any member may make to anybody's task (`commentsOnly` already allows it),
       so this verb also demonstrates that permission shape.
-- [ ] Batch forms: `--file` on `archive` and `remove`, matching the creators and edits.
+- [ ] No `--file` forms: the flag was removed from every verb while the plan was designed (`a-plan-that-runs-many-commands`),
+      so several removals are several steps in a plan, not a list flag on the verb.
 
 ## How to verify
 
