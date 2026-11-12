@@ -75,6 +75,34 @@ is the whole rule.
 The core still has `Store.impersonate()` — it exists for the SPA's "view as", which is a *reading* tool — but nothing in this
 package, and nothing in a plan, can reach it.
 
+## Two front ends, one step list
+
+A plan written as **CLI lines** is the shape most people mean by "a list of commands", and it costs almost nothing, because the
+CLI already owns the parser: a line is `verb + args + flags`, read by the same `parseFlags` every single command uses. So the
+design takes both spellings and compiles them to one `Step`:
+
+```
+# seed.btid — a plan as commands, one per line
+name=ivan   person new ivan --name Ivan
+            project new alpha "Alpha One" --start 2026-11-03 --end 2026-12-18
+name=task   task new --project alpha --title "Header budgets"
+            task edit $task --assignee ivan --estimate 4 --start 2026-11-09 --end 2026-11-13
+            task promote $task
+            task remove $task --yes
+```
+
+- **`name=<id>`** at the start of a line names the row the step creates; a bare line is unnamed.
+- **`$name`** interpolates that row's id, in an argument or a flag value. Interpolation happens **before** parsing, and an id
+  is `alpha-n7qk` — letters, digits and one dash — so it cannot change what the line means.
+- `#` starts a comment; blank lines are ignored.
+- **A line is only `verb + args + flags`.** Pipes, `&&`, `;`, redirections and environment variables are **refused by name**
+  (`usage: a plan line cannot use "&&"; a plan is not a shell`) rather than half-supported, because a file that looks like a
+  shell script and is not one is worse than either.
+
+Both files compile to the same `Step` and go through the same runner: the JSON form for a machine that wants unambiguous
+values, the line form for a person who wants to copy a command out of `docs/lifecycle-of-a-task.md` and run it. `btid plan
+check <file>` accepts either and prints the compiled steps, which is also how a plan is reviewed before it runs.
+
 ## How it runs
 
 | | |
@@ -128,6 +156,9 @@ context's deferral flag so each verb's commit becomes a recorded message, and on
 4. **Should a plan be able to nest?** No. A plan calling a plan is a build system, and this is a CLI.
 5. **Should a plan be able to say who it runs as?** No, and that is a decision rather than an omission: no `--as`, no
    impersonation step, and the check refuses one before anything runs.
+6. **Which spelling is canonical?** Two front ends, one step list: line files (reusing the CLI's own parser) and JSON files
+   (unambiguous values) both compile to the same steps. If only one survives review, keep the line form — it cannot drift from
+   the CLI's grammar, because it *is* that grammar.
 
 ## How to verify
 
