@@ -180,6 +180,24 @@ Nothing is settable only by editing JSON. The three `edit` verbs cover the three
 | `project edit` | `--name --start --end --description --status --color --members --labels` |
 | `person edit` | `--name --handle --role --active` |
 
+**Deleting** exists for all three types, and asks first — `--yes` is required, because deleting is the one action with no undo:
+
+```console
+$ btid task remove alpha-a1b2                 # exits 2: "deletes a row and cannot be undone. Pass --yes to mean it."
+$ btid task remove alpha-a1b2 --yes
+removed  alpha-a1b2   Check the header budgets
+
+$ btid project remove alpha --yes             # refused: PROJECT_NOT_EMPTY, "still holds 3 tasks…"
+$ btid project remove alpha --yes --force     # and its tasks with it
+removed  alpha   Alpha One   and 3 tasks
+
+$ btid person remove ivan --yes               # refused: PERSON_IN_USE while they hold work
+```
+
+A person who has left is **deactivated** (`person edit --active off`), not deleted: removing somebody who is still an assignee or
+an owner would leave rows naming a ghost. And the two reads a plan uses to reuse an existing row exist too — `project show <id>`,
+`person show <id|handle>` — alongside `task show`.
+
 **Every `edit` also takes `--file`**: an array of `{"id": "alpha-a1b2", "patch": {…}, "note": "…"}`, applied as one command and
 one commit. It is the core's own update input, not a second dialect — and a single edit is a one-item batch internally, so
 there is one code path:

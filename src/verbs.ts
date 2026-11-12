@@ -821,6 +821,145 @@ function personPatchFromFlags(context: VerbContext): { patch: Record<string, unk
 }
 
 
+/** The five verbs the plan design needed: three removals and two shows. */
+
+const removeFlagHelp = 'refused without it: deleting is the one action with no undo'
+
+const taskRemove: Verb = {
+  name: 'task remove',
+  summary: `Delete a task. Needs --yes (${removeFlagHelp}).`,
+  usage: 'btid task remove <id> --yes [--json] [--dry-run]',
+  flags: { yes: 'boolean', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid task remove <id> --yes', context.out, context.json)
+    if (context.flags['yes'] !== true) {
+      return usage(`btid task remove deletes a row and cannot be undone. Pass --yes to mean it.`, context.out, context.json)
+    }
+
+    const result = context.store.task(id).remove()
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `remove ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`removed  ${result.value.taskId}   ${result.value.title}`)
+    return 0
+  },
+}
+
+const projectRemove: Verb = {
+  name: 'project remove',
+  summary: `Delete a project, and its tasks with --force. Needs --yes (${removeFlagHelp}).`,
+  usage: 'btid project remove <id> --yes [--force] [--json] [--dry-run]',
+  flags: { yes: 'boolean', force: 'boolean', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid project remove <id> --yes', context.out, context.json)
+    if (context.flags['yes'] !== true) {
+      return usage('btid project remove deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
+    }
+
+    const result = context.store.project(id).remove({ force: context.flags['force'] === true })
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `remove project ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    const { project, tasks } = result.value
+    if (context.json) context.out.json({ project, tasks })
+    else {
+      context.out.line(`removed  ${project.id}   ${project.name}${tasks > 0 ? `   and ${tasks} ${tasks === 1 ? 'task' : 'tasks'}` : ''}`)
+    }
+    return 0
+  },
+}
+
+const personRemove: Verb = {
+  name: 'person remove',
+  summary: `Delete somebody from the roster. Needs --yes (${removeFlagHelp}).`,
+  usage: 'btid person remove <id> --yes [--json] [--dry-run]',
+  flags: { yes: 'boolean', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid person remove <id> --yes', context.out, context.json)
+    if (context.flags['yes'] !== true) {
+      return usage('btid person remove deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
+    }
+
+    const result = context.store.person(id).remove()
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `remove person ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`removed  ${result.value.id}   ${result.value.displayName}`)
+    return 0
+  },
+}
+
+/** One project, by key. The read a plan uses to reuse a row it did not create. */
+const projectShow: Verb = {
+  name: 'project show',
+  summary: 'Print one project.',
+  usage: 'btid project show <id> [--json]',
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid project show <id>', context.out, context.json)
+
+    const handle = context.store.project(id)
+    const row = handle.row
+    if (row === undefined) {
+      return refusal({ ok: false, code: 'PROJECT_NOT_FOUND', reason: `Project ${id} is not in the store.` }, context.out, context.json)
+    }
+
+    const tasks = handle.tasks()
+    if (context.json) {
+      context.out.json({ ...row, tasks: tasks.total })
+      return 0
+    }
+    context.out.line(`${row.id}  ${row.name}`)
+    context.out.line(`  owner ${row.ownerId}   members ${row.members.length === 0 ? '—' : row.members.join(', ')}   status ${row.status}`)
+    context.out.line(`  window ${dayOf(row.startDate)} → ${dayOf(row.endDate)}   tasks ${tasks.total}   labels ${row.labels.length === 0 ? '—' : row.labels.join(', ')}`)
+    return 0
+  },
+}
+
+/** One person, by roster id **or** GitHub handle — a plan author has one or the other. */
+const personShow: Verb = {
+  name: 'person show',
+  summary: 'Print one person, by roster id or GitHub handle.',
+  usage: 'btid person show <id|handle> [--json]',
+  async run(context) {
+    const who = context.args[0]
+    if (who === undefined) return usage('btid person show <id|handle>', context.out, context.json)
+
+    // A roster id is a slug of the login, so the two often coincide; the handle is checked too because a renamed person keeps
+    // the id they were created with.
+    const rows = context.store.all('person')
+    const row = rows.find((person) => person.id === who) ?? rows.find((person) => person.githubHandle === who)
+    if (row === undefined) {
+      return refusal({ ok: false, code: 'PERSON_NOT_FOUND', reason: `Person ${who} is not on the roster.` }, context.out, context.json)
+    }
+
+    const handle = context.store.person(row.id)
+    const tasks = handle.tasks()
+    if (context.json) {
+      context.out.json({ ...row, tasks: tasks.total })
+      return 0
+    }
+    context.out.line(`${row.id}  ${row.displayName}`)
+    context.out.line(`  handle @${row.githubHandle}   role ${row.role}${row.active ? '' : '   inactive'}`)
+    context.out.line(`  tasks ${tasks.total}`)
+    return 0
+  },
+}
+
 // --- cache --------------------------------------------------------------------------
 
 const cacheShow: Verb = {
@@ -937,14 +1076,19 @@ export const VERBS: readonly Verb[] = [
   taskLs,
   taskShow,
   taskPromote,
+  taskRemove,
   taskNew,
   taskEdit,
   projectLs,
+  projectShow,
   projectNew,
   projectEdit,
+  projectRemove,
   personLs,
+  personShow,
   personNew,
   personEdit,
+  personRemove,
   storeWhoami,
   storeInit,
   cacheShow,

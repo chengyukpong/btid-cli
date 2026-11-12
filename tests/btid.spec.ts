@@ -591,6 +591,71 @@ describe('btid', () => {
     assert.equal(error.code, 'ALREADY_PROMOTED')
   })
 
+  it('shows a project and a person, by id and by handle', async () => {
+    assert.equal(await btid(['project', 'show', 'alpha']), 0, lines.text)
+    assert.match(lines.text, /alpha {2}Alpha One/)
+    assert.match(lines.text, /tasks 1/)
+
+    lines.written.length = 0
+    assert.equal(await btid(['person', 'show', 'chengyukpong']), 0, lines.text)
+    assert.match(lines.text, /chengyukpong {2}Cheng/)
+
+    lines.written.length = 0
+    assert.equal(await btid(['person', 'show', 'chengyukpong', '--json']), 0)
+    const row = lines.json[0] as { id: string; githubHandle: string; tasks: number }
+    assert.equal(row.githubHandle, 'chengyukpong')
+    assert.equal(row.tasks, 1)
+  })
+
+  it('says a project or person is gone instead of throwing', async () => {
+    assert.equal(await btid(['project', 'show', 'nope']), 1)
+    assert.match(lines.text, /PROJECT_NOT_FOUND/)
+    lines.written.length = 0
+    assert.equal(await btid(['person', 'show', 'nobody']), 1)
+    assert.match(lines.text, /PERSON_NOT_FOUND/)
+  })
+
+  it('deletes a task only when --yes is given, and cannot bring it back', async () => {
+    const refused = await btid(['task', 'remove', 'alpha-a1b2'])
+    assert.equal(refused, 2)
+    assert.match(lines.text, /cannot be undone. Pass --yes to mean it/)
+
+    lines.written.length = 0
+    const code = await btid(['task', 'remove', 'alpha-a1b2', '--yes'])
+    assert.equal(code, 0, lines.text)
+    assert.match(lines.text, /removed {2}alpha-a1b2/)
+    assert.equal(client.messages.at(-1), 'remove alpha-a1b2')
+    assert.equal(client.files.has('projects/alpha/tasks.json'), false, 'a file with no rows is gone')
+  })
+
+  it('refuses to delete a project that still holds tasks, and takes them when forced', async () => {
+    const refused = await btid(['project', 'remove', 'alpha', '--yes'])
+    assert.equal(refused, 1)
+    assert.match(lines.text, /PROJECT_NOT_EMPTY/)
+    assert.match(lines.text, /still holds 1 task/)
+
+    lines.written.length = 0
+    const forced = await btid(['project', 'remove', 'alpha', '--yes', '--force'])
+    assert.equal(forced, 0, lines.text)
+    assert.match(lines.text, /removed {2}alpha {3}Alpha One {3}and 1 task/)
+    assert.equal(client.messages.at(-1), 'remove project alpha')
+  })
+
+  it('refuses to delete somebody who is still on work', async () => {
+    client.put('people.json', {
+      chengyukpong: managerRow,
+      ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
+      idle: { ...managerRow, id: 'idle', displayName: 'Idle', githubHandle: 'idle', role: 'member' },
+    })
+    const refused = await btid(['person', 'remove', 'chengyukpong', '--yes'])
+    assert.equal(refused, 1)
+    assert.match(lines.text, /PERSON_IN_USE/)
+
+    lines.written.length = 0
+    assert.equal(await btid(['person', 'remove', 'idle', '--yes']), 0, lines.text)
+    assert.equal(client.messages.at(-1), 'remove person idle')
+  })
+
   it('refuses a member adding a project, in the manager’s words', async () => {
     client.put('people.json', { ...{ [managerRow.id]: { ...managerRow, role: 'member' } } })
     const code = await btid(['project', 'new', 'beta', 'Beta'])
