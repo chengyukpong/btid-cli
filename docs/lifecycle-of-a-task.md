@@ -6,6 +6,10 @@ refusal is one you can reproduce.
 
 The task is imaginary; the rules are not.
 
+> **Two grammars, one page.** The commands below are written in the grammar settled in
+> [docs/grammar.md](grammar.md) — `btid <verb> <path> [data]` — which 0.12.0 implements. The CLI installed today still speaks
+> the older `btid task edit alpha-n7qk` form; where the two differ, this page is the target.
+
 ---
 
 ## The row this is about
@@ -22,11 +26,11 @@ The task is imaginary; the rules are not.
 
 ```console
 $ export BTID_STORE=yuk-org/btid-store@main     # or --store on every command
-$ btid store init
+$ btid new store
 init  yuk-org/btid-store@main
       manager chengyukpong
 
-$ btid project new alpha "Alpha One" --start 2026-10-26 --end 2026-11-23
+$ btid new project --key alpha --name "Alpha One" --start 2026-10-26 --end 2026-11-23
 project  alpha   Alpha One
 ```
 
@@ -38,7 +42,7 @@ project is created *with* its dates or it cannot hold work.
 ## 1. Capture — the row exists, and it is not yet work
 
 ```console
-$ btid task new --project alpha --title "Check the header budgets"
+$ btid new task --project alpha --title "Check the header budgets"
 captured  alpha-n7qk   backlog   Check the header budgets
 ```
 
@@ -53,7 +57,7 @@ because every reference to the task would break.
 ## 2. Claim — somebody owns it
 
 ```console
-$ btid task edit alpha-n7qk --assignee chengyukpong
+$ btid edit task/alpha-n7qk --assignee chengyukpong
 edited  alpha-n7qk   rev 1
 ```
 
@@ -65,7 +69,7 @@ person who will do it, recorded before it starts.
 ## 3. Getting ready — the six things promotion will check
 
 ```console
-$ btid task edit alpha-n7qk \
+$ btid edit task/alpha-n7qk \
     --start 2026-11-09 --end 2026-11-13 \
     --estimate 4 \
     --dod "Both header columns line up at 1440 and 1280."
@@ -77,7 +81,7 @@ edited  alpha-n7qk   rev 2
 If you ask to promote too early, the CLI tells you exactly what is missing, not that something is:
 
 ```console
-$ btid task promote alpha-n7qk
+$ btid promote task/alpha-n7qk
 refused: Before promotion: add an estimate and a definition of done. (PROMOTION_INCOMPLETE)
 ```
 
@@ -87,9 +91,9 @@ same reason. Nothing was written.
 **A short task is a different shape**: `--small on` books clock times, and day dates are refused by the schema —
 
 ```console
-$ btid task edit alpha-n7qk --small on --start 2026-11-09 --end 2026-11-13
+$ btid edit task/alpha-n7qk --small on --start 2026-11-09 --end 2026-11-13
 error: cannot update this task row: it is not valid v1 data  (INVALID_ROW)     # exit 3
-$ btid task edit alpha-n7qk --small on --start 2026-11-09T09:00 --end 2026-11-09T13:00 --note "Four hours, not a day."
+$ btid edit task/alpha-n7qk --small on --start 2026-11-09T09:00 --end 2026-11-09T13:00 --note "Four hours, not a day."
 edited  alpha-n7qk   rev 3
 ```
 
@@ -100,7 +104,7 @@ Eight hours for a `09:00` start, four for `13:00`: the cap is arithmetic on the 
 ## 4. Promote — the one crossing onto the board
 
 ```console
-$ btid task promote alpha-n7qk
+$ btid promote task/alpha-n7qk
 promoted  alpha-n7qk   todo   rev 3
 ```
 
@@ -108,19 +112,19 @@ promoted  alpha-n7qk   todo   rev 3
 
 Two things are now true that were not before:
 
-- the row is **board work** — it appears in any `btid task ls` that filters on status;
+- the row is **board work** — it appears in any `btid ls task` that filters on status;
 - **status edits are legal**. Before promotion they are not:
 
 ```console
 # before promotion, on a backlog row:
-$ btid task edit alpha-n7qk --status todo
+$ btid edit task/alpha-n7qk --status todo
 refused: Promote the item to move it onto the board. (NOT_ALLOWED)
 ```
 
 Promotion also refuses a second crossing, and points at the right verb:
 
 ```console
-$ btid task promote alpha-n7qk
+$ btid promote task/alpha-n7qk
 refused: alpha-n7qk is already on the board (todo). Change its status instead of promoting it again. (ALREADY_PROMOTED)
 ```
 
@@ -134,11 +138,11 @@ refused: alpha-n7qk is already on the board (todo). Change its status instead of
 **Labels are added one at a time.** `--labels a,b` replaces the whole list, which is the wrong tool once a task is in flight:
 
 ```console
-$ btid task label add alpha-n7qk ui
+$ btid add task/alpha-n7qk/label ui
 labeled    alpha-n7qk   ui   ui
-$ btid task label add alpha-n7qk billing
+$ btid add task/alpha-n7qk/label billing
 labeled    alpha-n7qk   billing   ui, billing
-$ btid task label add alpha-n7qk billing
+$ btid add task/alpha-n7qk/label billing
 unchanged  alpha-n7qk   billing
 ```
 
@@ -147,10 +151,10 @@ A new label joins the project's vocabulary in the same commit; removing one leav
 **Steps are added and ticked by id**, never by position — a position changes when another step is removed:
 
 ```console
-$ btid task step new alpha-n7qk --name "Measure the header at 1440"
+$ btid new task/alpha-n7qk/step --name "Measure the header at 1440"
 step  alpha-n7qk   0/1 done
   1. [ ] st-a1b2  Measure the header at 1440
-$ btid task step done alpha-n7qk st-a1b2
+$ btid done task/alpha-n7qk/step/st-a1b2
 step  alpha-n7qk   1/1 done
   1. [x] st-a1b2  Measure the header at 1440
 ```
@@ -160,10 +164,10 @@ step  alpha-n7qk   1/1 done
 **`done` and `undo` are inverses**, so a step can be reopened without retyping it:
 
 ```console
-$ btid task step done alpha-n7qk st-a1b2
+$ btid done task/alpha-n7qk/step/st-a1b2
 step  alpha-n7qk   1/1 done
   1. [x] st-a1b2  Measure the header at 1440
-$ btid task step undo alpha-n7qk st-a1b2
+$ btid undo task/alpha-n7qk/step/st-a1b2
 step  alpha-n7qk   0/1 done
   1. [ ] st-a1b2  Measure the header at 1440
 ```
@@ -174,31 +178,31 @@ the CLI — the store's commits are the undo. Ticking a step that is already don
 ### The ordinary edits, and the one rule that bites
 
 ```console
-$ btid task edit alpha-n7qk --status in_progress
+$ btid edit task/alpha-n7qk --status in_progress
 edited  alpha-n7qk   rev 4
 
-$ btid task edit alpha-n7qk --percent 40
+$ btid edit task/alpha-n7qk --percent 40
 edited  alpha-n7qk   rev 5
 
-$ btid task edit alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
+$ btid edit task/alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
 edited  alpha-n7qk   rev 6
 
-$ btid task edit alpha-n7qk --blocked off --blocked-reason none
+$ btid edit task/alpha-n7qk --blocked off --blocked-reason none
 edited  alpha-n7qk   rev 7
 ```
 
 **Blocked is a flag, not a column**: the task stays `in_progress`; what changes is that it says why it cannot move.
-`btid task show` prints the block, and the row's log holds the day it started — that is what `blockedSince` reads.
+`btid show task/<id>` prints the block, and the row's log holds the day it started — that is what `blockedSince` reads.
 
 **The rule that started all of this** — a tracked task's end day needs a reason:
 
 ```console
-$ btid task edit alpha-n7qk --tracked on --end 2026-11-16
+$ btid edit task/alpha-n7qk --tracked on --end 2026-11-16
 refused: Changing the end day of a tracked task needs a reason. (END_DATE_NEEDS_REASON)
 $ echo $?
 1
 
-$ btid task edit alpha-n7qk --end 2026-11-16 --note "The header spec slipped a week."
+$ btid edit task/alpha-n7qk --end 2026-11-16 --note "The header spec slipped a week."
 edited  alpha-n7qk   rev 8
 ```
 
@@ -208,7 +212,7 @@ did this move?"* is answered where the move is.
 **Who may edit** is a rule, not a UI state. As a member:
 
 ```console
-$ btid task edit alpha-n7qk --title "Mine now"
+$ btid edit task/alpha-n7qk --title "Mine now"
 refused: alpha-n7qk is assigned to chengyukpong; only they or the manager can change it. (NOT_ALLOWED)
 ```
 
@@ -219,7 +223,7 @@ The exception is a comment — any member may add one to any task.
 ## 6. Finish
 
 ```console
-$ btid task edit alpha-n7qk --status done --percent 100
+$ btid edit task/alpha-n7qk --status done --percent 100
 edited  alpha-n7qk   rev 9
 ```
 
@@ -237,41 +241,44 @@ step by step.
 
 ```console
 # 1. capture
-btid task new --project alpha --title "Check the header budgets"
+btid new task --project alpha --title "Check the header budgets"
 
 # 2. claim
-btid task edit alpha-n7qk --assignee chengyukpong
+btid edit task/alpha-n7qk --assignee chengyukpong
 
 # 3. ready — the six fields promotion checks
-btid task edit alpha-n7qk --start 2026-11-09 --end 2026-11-13 --estimate 4 \
+btid edit task/alpha-n7qk --start 2026-11-09 --end 2026-11-13 --estimate 4 \
      --dod "Both header columns line up at 1440 and 1280."
 
 # 4. promote onto the board
-btid task promote alpha-n7qk
+btid promote task/alpha-n7qk
 
 # 5. work
-btid task label add alpha-n7qk ui
-btid task label add alpha-n7qk billing
-btid task step new alpha-n7qk --name "Measure the header at 1440"
-btid task step done alpha-n7qk st-a1b2
-btid task step undo alpha-n7qk st-a1b2
-btid task edit alpha-n7qk --status in_progress
-btid task edit alpha-n7qk --percent 40
-btid task edit alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
-btid task edit alpha-n7qk --blocked off --blocked-reason none
-btid task edit alpha-n7qk --tracked on --end 2026-11-16 --note "The header spec slipped a week."
+btid add task/alpha-n7qk/label ui
+btid add task/alpha-n7qk/label billing
+btid remove task/alpha-n7qk/label ui          # ui was the wrong label; billing stays
+btid new task/alpha-n7qk/step --name "Measure the header at 1440"   # → st-a1b2
+btid new task/alpha-n7qk/step --name "Draft the 1440 measurement"   # → st-c3d4
+btid done task/alpha-n7qk/step/st-a1b2
+btid undo task/alpha-n7qk/step/st-a1b2        # and back, so the pair is visible
+btid remove task/alpha-n7qk/step/st-c3d4      # the draft was superseded
+btid edit task/alpha-n7qk --status in_progress
+btid edit task/alpha-n7qk --percent 40
+btid edit task/alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
+btid edit task/alpha-n7qk --blocked off --blocked-reason none
+btid edit task/alpha-n7qk --tracked on --end 2026-11-16 --note "The header spec slipped a week."
 
 # 6. finish
-btid task edit alpha-n7qk --status done --percent 100
+btid edit task/alpha-n7qk --status done --percent 100
 ```
 
-Fifteen commands, fifteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
+Nineteen commands, nineteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
 do, not steps of the life.
 
 ## Where the row stands
 
 ```console
-$ btid task show alpha-n7qk
+$ btid show task/alpha-n7qk
 alpha-n7qk  Check the header budgets
   project alpha   status done   owner chengyukpong   100%
   window  2026-11-09 → 2026-11-16   estimate 4
@@ -282,10 +289,10 @@ alpha-n7qk  Check the header budgets
 | status | backlog | backlog | backlog | todo | **done** |
 | stage | unclaimed | claimed | claimed | promoted | promoted |
 | firstPromotedAt | — | — | — | set | **unchanged** |
-| rev | 0 | 1 | 2 | 3 | **14** |
-| commits | 1 | 2 | 3 | 4 | **15** |
+| rev | 0 | 1 | 2 | 3 | **18** |
+| commits | 1 | 2 | 3 | 4 | **19** |
 
-One command, one commit: fifteen commands, fifteen commits, each named after the verb and the row — `capture alpha-n7qk`,
+One command, one commit: nineteen commands, nineteen commits, each named after the verb and the row — `capture alpha-n7qk`,
 `promote alpha-n7qk`, `edit alpha-n7qk`, `label alpha-n7qk ui`, `step add alpha-n7qk`. `git log` in the store is the audit trail, and the row's own `activities` is the same
 story told per field.
 
@@ -294,9 +301,9 @@ story told per field.
 ## 7. Remove — the only action with no undo
 
 ```console
-$ btid task remove alpha-n7qk
-usage: btid task remove deletes a row and cannot be undone. Pass --yes to mean it.     # exit 2
-$ btid task remove alpha-n7qk --yes
+$ btid remove task/alpha-n7qk
+usage: remove deletes a row and cannot be undone. Pass --yes to mean it.     # exit 2
+$ btid remove task/alpha-n7qk --yes
 removed  alpha-n7qk   Check the header budgets
 ```
 
@@ -309,15 +316,15 @@ Two lifecycle moments have no verb, and the plan for them is worth stating so no
 
 | what | rule that exists | verb planned |
 |---|---|---|
-| **archive** (set `archivedAt`, hide from the board, keep the row) | — | `btid task archive <id>` |
-| **delete** (remove the row; the one action with no undo) | `canDeleteTask`: the manager, the assignee, or the creator while unpromoted | `btid task remove <id> [--yes]` |
+| **archive** (set `archivedAt`, hide from the board, keep the row) | — | `btid archive task/<id>` |
+| **delete** (remove the row; the one action with no undo) | `canDeleteTask`: the manager, the assignee, or the creator while unpromoted | `btid remove task/<id> --yes` |
 
 Until then both are the SPA's, or a hand-written commit — which is exactly what this project exists to prevent, so neither
 should be done by hand in a store that matters.
 
-Also unbuilt: **`task comment`** — the row carries `comments` and the core's `commentsOnly` rule already allows any member to
-add one to anybody's task, but no command reaches it; and **`task step move`**, for reordering the checklist without a `seq`
-field. `task step` and `task label` themselves are built as of 0.11.1, and `task remove` as of 0.10.0.
+Also unbuilt: the comment verbs (`add task/<id>/comment` / `ls task/<id>/comment` — the row carries `comments` and the core's
+`commentsOnly` rule already allows any member to add one to anybody's task, but no command reaches it), and **`move`** for
+reordering a checklist without a `seq` field (`move task/<id>/step/<step-id> --before <step-id>`).
 
 ---
 
@@ -335,9 +342,9 @@ purpose: several changes in sequence are a plan's job, and that verb is designed
 ```
 
 ```console
-$ btid task edit alpha-n7qk --estimate 4 --dod "Both header columns line up at 1440 and 1280."
+$ btid edit task/alpha-n7qk --estimate 4 --dod "Both header columns line up at 1440 and 1280."
 edited  alpha-n7qk   rev 2
-$ btid task promote alpha-n7qk
+$ btid promote task/alpha-n7qk
 promoted  alpha-n7qk   todo   rev 3
 ```
 
@@ -352,16 +359,16 @@ Run on the prepared store `chengyukpong/btid-cli-test@main`, as `chengyukpong`, 
 **Every refusal in this document happened, in the words it predicted:**
 
 ```
-$ btid task edit alpha-qkka --status todo
+$ btid edit task/alpha-qkka --status todo
 refused: Promote the item to move it onto the board. (NOT_ALLOWED)
 
-$ btid task promote alpha-qkka
+$ btid promote task/alpha-qkka
 refused: Before promotion: add an owner, a start date, an end date, an estimate and a definition of done. (PROMOTION_INCOMPLETE)
 
-$ btid task edit alpha-qkka --end 2026-11-16          # after --tracked on
+$ btid edit task/alpha-qkka --end 2026-11-16          # after --tracked on
 refused: Changing the end day of a tracked task needs a reason. (END_DATE_NEEDS_REASON)
 
-$ btid task promote alpha-4k7y                        # an older row, promoted a minute earlier by the operator
+$ btid promote task/alpha-4k7y                        # an older row, promoted a minute earlier by the operator
 refused: alpha-4k7y is already on the board (todo). Change its status instead of promoting it again. (ALREADY_PROMOTED)
 ```
 
