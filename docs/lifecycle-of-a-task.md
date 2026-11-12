@@ -129,7 +129,35 @@ refused: alpha-n7qk is already on the board (todo). Change its status instead of
 
 ---
 
-## 5. Work — the ordinary edits, and the one rule that bites
+## 5. Work — the ordinary edits, the labels, and the checklist
+
+**Labels are added one at a time.** `--labels a,b` replaces the whole list, which is the wrong tool once a task is in flight:
+
+```console
+$ btid task label add alpha-n7qk ui
+labeled    alpha-n7qk   ui   ui
+$ btid task label add alpha-n7qk billing
+labeled    alpha-n7qk   billing   ui, billing
+$ btid task label add alpha-n7qk billing
+unchanged  alpha-n7qk   billing
+```
+
+A new label joins the project's vocabulary in the same commit; removing one leaves the project's list alone.
+
+**Steps are added and ticked by id**, never by position — a position changes when another step is removed:
+
+```console
+$ btid task step add alpha-n7qk --name "Measure the header at 1440"
+step  alpha-n7qk   0/1 done
+  1. [ ] st-a1b2  Measure the header at 1440
+$ btid task step done alpha-n7qk st-a1b2
+step  alpha-n7qk   1/1 done
+  1. [x] st-a1b2  Measure the header at 1440
+```
+
+`rename`, `undo` and `remove` take the same address. Ticking a step that is already done prints `unchanged` and writes nothing.
+
+### The ordinary edits, and the one rule that bites
 
 ```console
 $ btid task edit alpha-n7qk --status in_progress
@@ -209,6 +237,18 @@ story told per field.
 
 ---
 
+## 7. Remove — the only action with no undo
+
+```console
+$ btid task remove alpha-n7qk
+usage: btid task remove deletes a row and cannot be undone. Pass --yes to mean it.     # exit 2
+$ btid task remove alpha-n7qk --yes
+removed  alpha-n7qk   Check the header budgets
+```
+
+Who may: the manager, the assignee, or the creator while the row is unpromoted (`NOT_ALLOWED` otherwise). The project keeps its
+labels and its other tasks; the removed row's id is never reused, so nothing that pointed at it silently points at a stranger.
+
 ## After the task: not built yet
 
 Two lifecycle moments have no verb, and the plan for them is worth stating so nobody invents a workaround:
@@ -221,8 +261,9 @@ Two lifecycle moments have no verb, and the plan for them is worth stating so no
 Until then both are the SPA's, or a hand-written commit — which is exactly what this project exists to prevent, so neither
 should be done by hand in a store that matters.
 
-Also unbuilt, and part of the same story: `task step add|done` and `task comment` — the row carries `steps` and `comments`
-today, but no CLI verb writes them.
+Also unbuilt: **`task comment`** — the row carries `comments` and the core's `commentsOnly` rule already allows any member to
+add one to anybody's task, but no command reaches it; and **`task step move`**, for reordering the checklist without a `seq`
+field. `task step` and `task label` themselves are built as of 0.11.1, and `task remove` as of 0.10.0.
 
 ---
 
