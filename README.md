@@ -74,7 +74,7 @@ A field the store starts validating is a field this CLI can name the day it land
 
 **Every row type can be created, changed, shown and deleted.** `task ls|show|new|edit|promote|remove`,
 `project ls|show|new|edit|remove`, `person ls|show|new|edit|remove`, `store whoami|init`, `cache show|clear`, `plan`, `version`,
-`help` — 21 verbs, 57 tests against a real `btid-core` and a real `githubdb` database with only the network replaced.
+`help` — 24 verbs, 64 tests against a real `btid-core` and a real `githubdb` database with only the network replaced.
 `step`, `comment` and `archive` wait on one core command each; writing the rule here is the one thing this project must not
 do. A project takes its window at creation (`--start --end`) or later (`project edit`), because a project without both dates
 refuses every capture. A verb changes **one row** and commits once. A sequence of rows is `btid plan` — a file of commands run in order against one

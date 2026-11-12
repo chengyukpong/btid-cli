@@ -2,6 +2,7 @@
 
 - **Status:** backlog
 - **Created:** 2026-11-11T19:02:00+08:00
+- **Updated:** 2026-11-12T18:15:00+08:00
 - **Finished:** —
 - **Approved:** —
 
@@ -16,17 +17,19 @@ Two of them are period-ends (archive, delete); two are the middle of the work (s
 
 ## Steps
 
-- [ ] **`task archive <id>`** — sets `archivedAt`; the row leaves the board and the counts, and stays in the store. One
-      command, one commit, `ARCHIVE` in the activity log (the field is already in `ACTIVITY_FIELDS`).
-- [ ] **`task remove <id> --yes`** — deletes the row. The rule exists (`canDeleteTask`: manager, assignee, or creator while
-      unpromoted) and has never been called. Deleting is the one action with no undo, so `--yes` is required and the commit
-      message names what went.
-- [ ] **`task step add <id> --name`** and **`task step done <id> <step>`** — `newStep()` exists; the write goes through the
-      row's log like any other change.
-- [ ] **`task comment <id> --text`** — the one change any member may make to anybody's task (`commentsOnly` already allows it),
-      so this verb also demonstrates that permission shape.
-- [ ] No `--file` forms: the flag was removed from every verb while the plan was designed (`a-plan-that-runs-many-commands`),
-      so several removals are several steps in a plan, not a list flag on the verb.
+Done since this was written — `task remove` (0.10.0), `task step new|rename|done|undo|remove` (0.11.0), labels one at a time
+(0.11.0), and `--file` removed from every verb. What is left is three verbs, each waiting on one core command
+(`the-three-commands-the-model-still-lacks` in btid-core):
+
+- [ ] **`archive task/<id>`** — sets `archivedAt`; the row leaves the board and the counts and stays in the store. Needs
+      `archiveTask`.
+- [ ] **`add task/<id>/comment <text>`** and **`ls task/<id>/comment`** — the one change any member may make to anybody's task.
+      Needs `commentOnTask`.
+- [ ] **`move task/<id>/step/<step-id> --before <step-id> | --after <step-id>`** — reordering without a `seq` field. Needs
+      `moveTaskStep`.
+
+Spelled here in the grammar of `docs/grammar.md`; while the CLI still speaks the old one, these are `task archive`,
+`task comment` and `task step move`.
 
 ## How to verify
 
