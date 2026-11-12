@@ -37,9 +37,9 @@ store has not minted yet.
 {
   "about": "Seed Alpha One with its first task, then retire it",
   "steps": [
-    { "name": "ivan", "verb": "person new", "args": ["ivan"], "flags": { "displayName": "Ivan" } },
+    { "let": "ivan", "verb": "person new", "args": ["ivan"], "flags": { "displayName": "Ivan" } },
     { "verb": "project new", "args": ["alpha", "Alpha One"], "flags": { "start": "2026-11-03", "end": "2026-12-18" } },
-    { "name": "task", "verb": "task new", "flags": { "project": "alpha", "title": "Header budgets" } },
+    { "let": "task", "verb": "task new", "flags": { "project": "alpha", "title": "Header budgets" } },
     { "verb": "task edit", "args": [{ "$ref": "task" }],
       "flags": { "assignee": "ivan", "start": "2026-11-09", "end": "2026-11-13", "estimate": 4,
                  "dod": "Both header columns line up." } },
@@ -53,8 +53,9 @@ Rules for the file, and they are the whole of its grammar:
 - **`verb`** is one of the sixteen in `btid help --json`, spelled exactly as there. An unknown verb is a usage error *before
   anything runs* — the plan is checked completely, then executed.
 - **`args`** and **`flags`** are the verb's own, so a plan is a call list, not a dialect.
-- **`name`** names a step whose created row later steps need. It is called `name` and not `as` on purpose: `as` reads as
-  *act as*, and identity is the one thing a plan may not touch (below).
+- **`let`** binds the id of the row this step creates to a variable later steps can use. Not `as` (which reads as *act as* —
+  identity is the one thing a plan may not touch, below) and not `name` (which reads as a field, and every row type has one).
+  `let` can only be read one way: *this id is now called that*.
 - **`{"$ref": "name"}`** resolves to that row's id (`alpha-n7qk`, `ivan`, `alpha`). Nothing else is dynamic — no expressions,
   no field lookups — because a plan that computes is a language, and this project does not need another one.
 - A **single object** instead of `steps` is a one-step plan, matching `--file`'s courtesy.
@@ -83,16 +84,16 @@ design takes both spellings and compiles them to one `Step`:
 
 ```
 # seed.btid — a plan as commands, one per line
-name=ivan   person new ivan --name Ivan
-            project new alpha "Alpha One" --start 2026-11-03 --end 2026-12-18
-name=task   task new --project alpha --title "Header budgets"
-            task edit $task --assignee ivan --estimate 4 --start 2026-11-09 --end 2026-11-13
-            task promote $task
-            task remove $task --yes
+let ivan = person new ivan --name Ivan
+           project new alpha "Alpha One" --start 2026-11-03 --end 2026-12-18
+let task = task new --project alpha --title "Header budgets"
+           task edit $task --assignee ivan --estimate 4 --start 2026-11-09 --end 2026-11-13
+           task promote $task
+           task remove $task --yes
 ```
 
-- **`name=<id>`** at the start of a line names the row the step creates; a bare line is unnamed.
-- **`$name`** interpolates that row's id, in an argument or a flag value. Interpolation happens **before** parsing, and an id
+- **`let <var> =`** at the start of a line binds the row the step creates; a bare line binds nothing.
+- **`$var`** interpolates that row's id, in an argument or a flag value. Interpolation happens **before** parsing, and an id
   is `alpha-n7qk` — letters, digits and one dash — so it cannot change what the line means.
 - `#` starts a comment; blank lines are ignored.
 - **A line is only `verb + args + flags`.** Pipes, `&&`, `;`, redirections and environment variables are **refused by name**
