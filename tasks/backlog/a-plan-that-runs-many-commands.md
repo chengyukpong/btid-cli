@@ -170,8 +170,9 @@ Three verbs, all of them the same shape as the ones already there:
 
 - **`task remove <id> --yes`** — `canDeleteTask` exists (the manager, the assignee, or the creator while unpromoted) and has
   never been called. Deleting is the one action with no undo.
-- **`project remove <id> --yes`** — manager's act. Refused while the project still holds tasks unless `--force`, because a
-  project row is what makes its tasks readable.
+- **`project remove <id> --yes`** — manager's act. Refused while the project still holds tasks unless `--cascade`, which
+  removes the tasks with it: a project row is what makes its tasks readable, so the removal carries them rather than
+  orphaning them.
 - **`person remove <id> --yes`** — manager's act. Refused while the person is an assignee or a project owner, so a roster row
   cannot vanish out from under work already promised.
 - **`project show <id>`** and **`person show <id|handle>`** — the two reads a plan needs to use rows it did not create

@@ -187,8 +187,8 @@ $ btid task remove alpha-a1b2                 # exits 2: "deletes a row and cann
 $ btid task remove alpha-a1b2 --yes
 removed  alpha-a1b2   Check the header budgets
 
-$ btid project remove alpha --yes             # refused: PROJECT_NOT_EMPTY, "still holds 3 tasks…"
-$ btid project remove alpha --yes --force     # and its tasks with it
+$ btid project remove alpha --yes             # refused: PROJECT_NOT_EMPTY, "still holds 3 tasks… remove it with --cascade"
+$ btid project remove alpha --yes --cascade   # and its tasks with it
 removed  alpha   Alpha One   and 3 tasks
 
 $ btid person remove ivan --yes               # refused: PERSON_IN_USE while they hold work

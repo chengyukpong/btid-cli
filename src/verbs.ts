@@ -852,9 +852,9 @@ const taskRemove: Verb = {
 
 const projectRemove: Verb = {
   name: 'project remove',
-  summary: `Delete a project, and its tasks with --force. Needs --yes (${removeFlagHelp}).`,
-  usage: 'btid project remove <id> --yes [--force] [--json] [--dry-run]',
-  flags: { yes: 'boolean', force: 'boolean', 'dry-run': 'boolean' },
+  summary: `Delete a project, and its tasks with --cascade. Needs --yes (${removeFlagHelp}).`,
+  usage: 'btid project remove <id> --yes [--cascade] [--json] [--dry-run]',
+  flags: { yes: 'boolean', cascade: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
@@ -863,7 +863,7 @@ const projectRemove: Verb = {
       return usage('btid project remove deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
     }
 
-    const result = context.store.project(id).remove({ force: context.flags['force'] === true })
+    const result = context.store.project(id).remove({ cascade: context.flags['cascade'] === true })
     if (!result.ok) return refusal(result, context.out, context.json)
 
     const committed = await commit(context, `remove project ${id}`)

@@ -628,15 +628,15 @@ describe('btid', () => {
     assert.equal(client.files.has('projects/alpha/tasks.json'), false, 'a file with no rows is gone')
   })
 
-  it('refuses to delete a project that still holds tasks, and takes them when forced', async () => {
+  it('refuses to delete a project that still holds tasks, and takes them when cascading', async () => {
     const refused = await btid(['project', 'remove', 'alpha', '--yes'])
     assert.equal(refused, 1)
     assert.match(lines.text, /PROJECT_NOT_EMPTY/)
     assert.match(lines.text, /still holds 1 task/)
 
     lines.written.length = 0
-    const forced = await btid(['project', 'remove', 'alpha', '--yes', '--force'])
-    assert.equal(forced, 0, lines.text)
+    const cascaded = await btid(['project', 'remove', 'alpha', '--yes', '--cascade'])
+    assert.equal(cascaded, 0, lines.text)
     assert.match(lines.text, /removed {2}alpha {3}Alpha One {3}and 1 task/)
     assert.equal(client.messages.at(-1), 'remove project alpha')
   })
