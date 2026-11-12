@@ -72,35 +72,36 @@ A variable is the **result** of its step, and every verb already returns somethi
 | `task edit`, `project edit`, `person edit` | the row as written — `$task.rev` is the revision it reached |
 | `task promote` | the row as promoted — `$task.status` is the column it landed in |
 | `task remove` | `{ id, removed: true }` — the id of what is gone, and nothing else, because nothing else is true any more |
-| a read (`ls`, `show`, `whoami`) | its result: `task show` → the row; `task ls` → `{ total, rows }`; `whoami` → `{ handle, actor, people, projects }` |
+| `task show` · `project show` · `person show` | the existing row — this is how a value that is already in the store enters a plan |
+| `store whoami` | `{ handle, actor, people, projects }` — the one place a plan may read "who is running me" |
 
 That is why `$task.id` and not `$task`: the second would have to *mean* one of twenty-nine fields, and the one it meant would be
 a decision this file made on the reader's behalf.
 
-## Reads are steps too
+## Shows: how an existing row becomes a value
 
-A plan is a program, and a program worth reading says what it saw. Every read verb is a step on the same terms as a write:
+A plan can already use what it **created**, because `let` binds the result. What it cannot do is use what is **already in the
+store** — and that is the whole point of allowing a read at all:
 
 ```
-let task = task new --project alpha --title "Header budgets"
-           task edit $task.id --estimate 4 --dod "Both columns line up."
-           task show $task.id                         # what it looks like mid-plan
-           task promote $task.id
-let after = task show $task.id
-           task ls projectId=alpha status=todo          # and what the board looks like now
+let alpha = project show alpha                 # a project somebody else made
+let me    = person  show chengyukpong          # an existing roster row, by id or handle
+let task  = task new --project $alpha.id --assignee $me.id \
+             --title "Header budgets" --start 2026-11-09 --end 2026-11-13
 ```
 
-- **A read never commits** — under `--commit=each` it writes nothing, and under `--commit=end` it is not part of the one commit.
-- **It prints.** Text mode prints the verb's normal output, in place, so the plan narrates itself; `--quiet` reduces every step to
-  one line (`4  task show  ok`) and keeps the transcript scannable. `--json` emits the step and its result together:
-  `{"step":4,"verb":"task show","ok":true,"result":{…}}`.
-- **It can be bound**, and that is why reads are in scope: `let after = task promote $task.id` followed by `$after.status` is how a
-  later step can *say* where the task stands without the plan computing anything.
-- **A list binds `{ total, rows }`** — `$todos.total` is a number you can interpolate; `$todos.rows` is refused
-  (*"a field holding a list cannot be interpolated — bind a single row with `task show` instead"*), because there is no sensible
-  way to put forty rows into one flag value.
-- **`--dry-run` runs nothing**, reads included: a dry run must not need the network to tell you what it would do. `btid plan
-  check` is the parse-only pass; a plan that wants to *assert* state is a later feature, not this one.
+So the read step is **`show`, and only `show`**:
+
+- **`task show <id>`** — exists today, binds the row.
+- **`project show <id>`** and **`person show <id|handle>`** — not built yet; `person show` accepts either the roster id or the
+  GitHub handle, because a plan author has one or the other.
+- **No `ls`.** A list is not a parameter: it cannot go into a flag, and a plan that chose *which* row to use from a list would be
+  branching. A plan that needs to choose a row is a plan whose author should name the row.
+- **Nothing else is a step.** `cache show`, `version`, `help` and the rest of `ls` are refused at check time with a sentence
+  (*"a plan runs commands; \`task ls\` is a report"*), so a plan file stays a program and not a transcript.
+
+A show never commits, prints its row like the single command does (`--quiet` reduces it to one line, `--json` carries the row in
+the step's result), and under `--dry-run` it does not run at all: a dry run must not need the network to say what it would do.
 
 ## Identity: one login, never switched
 
@@ -173,6 +174,8 @@ Three verbs, all of them the same shape as the ones already there:
   project row is what makes its tasks readable.
 - **`person remove <id> --yes`** — manager's act. Refused while the person is an assignee or a project owner, so a roster row
   cannot vanish out from under work already promised.
+- **`project show <id>`** and **`person show <id|handle>`** — the two reads a plan needs to use rows it did not create
+  (`task show` already exists). They are one command each in the core's view layer, and they are useful outside plans too.
 
 `task archive` is deliberately *not* a step in this design's first cut: archive and delete are different answers, and archive
 is a status change (`archivedAt`), not a removal. It follows the same pattern when it lands.
