@@ -37,9 +37,9 @@ store has not minted yet.
 {
   "about": "Seed Alpha One with its first task, then retire it",
   "steps": [
-    { "as": "ivan",  "verb": "person new",  "args": ["ivan"], "flags": { "name": "Ivan" } },
+    { "name": "ivan", "verb": "person new", "args": ["ivan"], "flags": { "displayName": "Ivan" } },
     { "verb": "project new", "args": ["alpha", "Alpha One"], "flags": { "start": "2026-11-03", "end": "2026-12-18" } },
-    { "as": "task", "verb": "task new", "flags": { "project": "alpha", "title": "Header budgets" } },
+    { "name": "task", "verb": "task new", "flags": { "project": "alpha", "title": "Header budgets" } },
     { "verb": "task edit", "args": [{ "$ref": "task" }],
       "flags": { "assignee": "ivan", "start": "2026-11-09", "end": "2026-11-13", "estimate": 4,
                  "dod": "Both header columns line up." } },
@@ -53,10 +53,27 @@ Rules for the file, and they are the whole of its grammar:
 - **`verb`** is one of the sixteen in `btid help --json`, spelled exactly as there. An unknown verb is a usage error *before
   anything runs* — the plan is checked completely, then executed.
 - **`args`** and **`flags`** are the verb's own, so a plan is a call list, not a dialect.
-- **`as`** names a step whose created row later steps need.
+- **`name`** names a step whose created row later steps need. It is called `name` and not `as` on purpose: `as` reads as
+  *act as*, and identity is the one thing a plan may not touch (below).
 - **`{"$ref": "name"}`** resolves to that row's id (`alpha-n7qk`, `ivan`, `alpha`). Nothing else is dynamic — no expressions,
   no field lookups — because a plan that computes is a language, and this project does not need another one.
 - A **single object** instead of `steps` is a one-step plan, matching `--file`'s courtesy.
+
+## Identity: one login, never switched
+
+**A plan has no way to say who it runs as.** Not a step, not a flag, not a field — the identity is the token's login, and that
+is the whole rule.
+
+- No `--as somebody`, and no step that names an identity; a plan step is a *call*, and a call cannot be made "as" anybody but
+  the caller.
+- The runner refuses an identity-changing verb **before the first request**: `impersonate`, `signout`, and anything the
+  manifest ever grows that would move the actor, are a plan-check failure (`2`), not a step.
+- The reason is the audit trail the store already keeps. Every row records `createdById`/`updatedBy`, every commit records
+  the token's author: a plan able to switch identity would let one credential author work as another, and the store would
+  say so with a straight face.
+
+The core still has `Store.impersonate()` — it exists for the SPA's "view as", which is a *reading* tool — but nothing in this
+package, and nothing in a plan, can reach it.
 
 ## How it runs
 
@@ -109,6 +126,8 @@ context's deferral flag so each verb's commit becomes a recorded message, and on
 3. **Where do plan files live?** Anywhere (`btid plan ./x.json`, `-` for stdin). A plan is not part of the store; it is a
    record of how a store was built, and committing it beside the store's own repository is the caller's choice.
 4. **Should a plan be able to nest?** No. A plan calling a plan is a build system, and this is a CLI.
+5. **Should a plan be able to say who it runs as?** No, and that is a decision rather than an omission: no `--as`, no
+   impersonation step, and the check refuses one before anything runs.
 
 ## How to verify
 
