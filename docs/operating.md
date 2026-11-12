@@ -226,21 +226,25 @@ other tasks may use it.
 ```console
 $ btid task step add alpha-jbbs --name "Measure the header at 1440"
 step  alpha-jbbs   0/1 done
-  [ ] 1. Measure the header at 1440
+  1. [ ] st-a1b2  Measure the header at 1440
 $ btid task step add alpha-jbbs --name "Sketch the fix"
 step  alpha-jbbs   0/2 done
-  [ ] 1. Measure the header at 1440
-  [ ] 2. Sketch the fix
-$ btid task step done alpha-jbbs 1              # by position…
+  1. [ ] st-a1b2  Measure the header at 1440
+  2. [ ] st-c3d4  Sketch the fix
+$ btid task step done alpha-jbbs st-a1b2        # a step is addressed by its id
 step  alpha-jbbs   1/2 done
-  [x] 1. Measure the header at 1440
-  [ ] 2. Sketch the fix
-$ btid task step rename alpha-jbbs 2 --name "Sketch the fix, in pencil"
-$ btid task step undo alpha-jbbs 1              # a step can be reopened
-$ btid task step remove alpha-jbbs 2
-$ btid task step done alpha-jbbs 9              # …or by id, and this one is not there
-refused: No step “9” on alpha-jbbs. It has: 1. Measure the header at 1440; 2. Sketch the fix, in pencil. (STEP_NOT_FOUND)
+  1. [x] st-a1b2  Measure the header at 1440
+  2. [ ] st-c3d4  Sketch the fix
+$ btid task step rename alpha-jbbs st-c3d4 --name "Sketch the fix, in pencil"
+$ btid task step undo alpha-jbbs st-a1b2        # a step can be reopened
+$ btid task step remove alpha-jbbs st-c3d4
+$ btid task step done alpha-jbbs 2              # the position is not an address
+refused: No step “2” on alpha-jbbs. It has: st-a1b2 Measure the header at 1440. A step is addressed by its id, not by its
+position — the number changes when one is removed. (STEP_NOT_FOUND)
 ```
+
+The number on the left is for reading only. Position is where a step happens to sit — removing one shifts every number after
+it — so the id (`st-` plus four characters) is the address, minted once and kept through renames.
 
 Ticking a step that is already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
 that re-runs must not have to read first. Every one of these is the same task write as an edit: same permission check, same

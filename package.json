@@ -1,6 +1,6 @@
 {
   "name": "btid-cli",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "private": true,
   "description": "The BTID terminal front end: parse, one command from btid-core, print.",
   "bin": {
@@ -18,7 +18,7 @@
     "prepare": "npm run build"
   },
   "dependencies": {
-    "btid-core": "file:../btid-core/release/btid-core-0.11.0.tgz",
+    "btid-core": "file:../btid-core/release/btid-core-0.11.1.tgz",
     "githubdb": "file:../githubdb/release/githubdb-2.2.0.tgz"
   },
   "devDependencies": {

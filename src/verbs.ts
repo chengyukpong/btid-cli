@@ -152,7 +152,7 @@ const taskShow: Verb = {
     if (handle.steps.length > 0) {
       const progress = handle.progress
       context.out.line(`  steps   ${progress.done}/${progress.total}`)
-      for (const step of handle.steps) context.out.line(`    [${step.done ? 'x' : ' '}] ${step.name}`)
+      for (const step of handle.steps) context.out.line(`    [${step.done ? 'x' : ' '}] ${step.id}  ${step.name}`)
     }
     for (const warning of handle.warnings) context.out.line(`  warning ${warning.message}`)
     return 0
@@ -861,7 +861,7 @@ const taskStep: Verb = {
   name: 'task step',
   summary: 'Add, rename, tick, untick or remove one step of a task.',
   usage:
-    'btid task step <add|rename|done|undo|remove> <id> [step] [--name text] [--json] [--dry-run]',
+    'btid task step <add|rename|done|undo|remove> <id> [step-id] [--name text] [--json] [--dry-run]',
   flags: { name: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -884,7 +884,7 @@ const taskStep: Verb = {
       }
       case 'rename': {
         if (ref === undefined || name === null) {
-          return usage('btid task step rename <id> <step> --name <text>', context.out, context.json)
+          return usage('btid task step rename <id> <step-id> --name <text>', context.out, context.json)
         }
         result = handle.renameStep(ref, name)
         message = `step rename ${id} ${ref}`
@@ -892,13 +892,13 @@ const taskStep: Verb = {
       }
       case 'done':
       case 'undo': {
-        if (ref === undefined) return usage(`btid task step ${action} <id> <step>`, context.out, context.json)
+        if (ref === undefined) return usage(`btid task step ${action} <id> <step-id>`, context.out, context.json)
         result = handle.setStepDone(ref, action === 'done')
         message = `step ${action} ${id} ${ref}`
         break
       }
       default: {
-        if (ref === undefined) return usage('btid task step remove <id> <step>', context.out, context.json)
+        if (ref === undefined) return usage('btid task step remove <id> <step-id>', context.out, context.json)
         result = handle.removeStep(ref)
         message = `step remove ${id} ${ref}`
       }
@@ -914,7 +914,10 @@ const taskStep: Verb = {
     else {
       const total = result.value.steps.length
       const done = result.value.steps.filter((step) => step.done).length
-      const listed = result.value.steps.map((step, index) => `${step.done ? '[x]' : '[ ]'} ${index + 1}. ${step.name}`)
+      // The id is printed because it is the only thing that addresses a step; the number is for reading.
+      const listed = result.value.steps.map(
+        (step, index) => `${String(index + 1).padStart(2)}. ${step.done ? '[x]' : '[ ]'} ${step.id}  ${step.name}`,
+      )
       context.out.line(`step  ${result.value.taskId}   ${total === 0 ? 'no steps' : `${done}/${total} done`}`)
       for (const line of listed) context.out.line(`  ${line}`)
     }
