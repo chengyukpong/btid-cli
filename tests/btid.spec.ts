@@ -304,6 +304,10 @@ describe('btid', () => {
   })
 
   it('edits a project’s colour, members and labels', async () => {
+    client.put('people.json', {
+      chengyukpong: managerRow,
+      ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
+    })
     const code = await btid([
       'project', 'edit', 'alpha',
       '--color', '#FF8800',
@@ -315,6 +319,14 @@ describe('btid', () => {
     assert.equal(project['color'], '#FF8800')
     assert.deepEqual(project['members'], ['ivan'])
     assert.deepEqual(project['labels'], ['ui', 'infra'])
+  })
+
+  it('refuses a member the roster does not hold', async () => {
+    const code = await btid(['project', 'edit', 'alpha', '--members', 'ghost'])
+    assert.equal(code, 1, lines.text)
+    assert.match(lines.text, /That person is not on the roster: ghost\. Add them with `person new` first\./)
+    assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
+    assert.equal(client.messages.length, 0, 'nothing was written')
   })
 
   it('edits a person: name, handle, role, active', async () => {

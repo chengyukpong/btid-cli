@@ -4,7 +4,7 @@
  * `CLI_VERSION` is written here rather than read from `package.json` because the build's `rootDir` is `src/` — importing a
  * file from above it would change the emit layout. A test asserts the two agree, so the copy cannot drift silently.
  */
-export const CLI_VERSION = '0.9.0'
+export const CLI_VERSION = '0.9.1'
 
 /** The manifest's own shape version: bump it when a field of `btid help --json` changes meaning. */
 export const MANIFEST_VERSION = 1
