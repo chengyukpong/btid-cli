@@ -214,6 +214,45 @@ stays on the board and in every count until it is archived or deleted.
 
 ---
 
+---
+
+## The commands, in order
+
+Every command this walkthrough ran, from capture to done — no output, just the list, so it can be read as one thing or copied
+step by step.
+
+```console
+# 1. capture
+btid task new --project alpha --title "Check the header budgets"
+
+# 2. claim
+btid task edit alpha-n7qk --assignee chengyukpong
+
+# 3. ready — the six fields promotion checks
+btid task edit alpha-n7qk --start 2026-11-09 --end 2026-11-13 --estimate 4 \
+     --dod "Both header columns line up at 1440 and 1280."
+
+# 4. promote onto the board
+btid task promote alpha-n7qk
+
+# 5. work
+btid task label add alpha-n7qk ui
+btid task label add alpha-n7qk billing
+btid task step add alpha-n7qk --name "Measure the header at 1440"
+btid task step done alpha-n7qk st-a1b2
+btid task edit alpha-n7qk --status in_progress
+btid task edit alpha-n7qk --percent 40
+btid task edit alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
+btid task edit alpha-n7qk --blocked off --blocked-reason none
+btid task edit alpha-n7qk --tracked on --end 2026-11-16 --note "The header spec slipped a week."
+
+# 6. finish
+btid task edit alpha-n7qk --status done --percent 100
+```
+
+Fourteen commands, fourteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
+do, not steps of the life.
+
 ## Where the row stands
 
 ```console
@@ -228,11 +267,11 @@ alpha-n7qk  Check the header budgets
 | status | backlog | backlog | backlog | todo | **done** |
 | stage | unclaimed | claimed | claimed | promoted | promoted |
 | firstPromotedAt | — | — | — | set | **unchanged** |
-| rev | 0 | 1 | 2 | 3 | **9** |
-| commits | 1 | 2 | 3 | 4 | **10** |
+| rev | 0 | 1 | 2 | 3 | **13** |
+| commits | 1 | 2 | 3 | 4 | **14** |
 
-One command, one commit: ten commands, ten commits, each named after the verb and the row — `capture alpha-n7qk`,
-`promote alpha-n7qk`, `edit alpha-n7qk`. `git log` in the store is the audit trail, and the row's own `activities` is the same
+One command, one commit: fourteen commands, fourteen commits, each named after the verb and the row — `capture alpha-n7qk`,
+`promote alpha-n7qk`, `edit alpha-n7qk`, `label alpha-n7qk ui`, `step add alpha-n7qk`. `git log` in the store is the audit trail, and the row's own `activities` is the same
 story told per field.
 
 ---
