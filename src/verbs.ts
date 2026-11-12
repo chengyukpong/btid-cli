@@ -849,7 +849,7 @@ const taskLabel: Verb = {
   },
 }
 
-const stepActions = new Set(['add', 'rename', 'done', 'undo', 'remove'])
+const stepActions = new Set(['new', 'add', 'rename', 'done', 'undo', 'remove'])
 
 /**
  * `btid task step add|rename|done|undo|remove <id> …`
@@ -860,15 +860,14 @@ const stepActions = new Set(['add', 'rename', 'done', 'undo', 'remove'])
 const taskStep: Verb = {
   name: 'task step',
   summary: 'Add, rename, tick, untick or remove one step of a task.',
-  usage:
-    'btid task step <add|rename|done|undo|remove> <id> [step-id] [--name text] [--json] [--dry-run]',
+  usage: 'btid task step <new|rename|done|undo|remove> <id> [step-id] [--name text] [--json] [--dry-run]',
   flags: { name: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const [action, id, ref] = [context.args[0], context.args[1], context.args[2]]
     const name = stringFlag(context.flags, 'name')
     if (action === undefined || !stepActions.has(action) || id === undefined) {
-      return usage('btid task step <add|rename|done|undo|remove> <id> [step] [--name text]', context.out, context.json)
+      return usage('btid task step <new|rename|done|undo|remove> <id> [step-id] [--name text]', context.out, context.json)
     }
 
     const before = context.store.task(id).row
@@ -876,10 +875,11 @@ const taskStep: Verb = {
     let result
     let message: string
     switch (action) {
+      case 'new':
       case 'add': {
-        if (name === null) return usage('btid task step add <id> --name <text>', context.out, context.json)
+        if (name === null) return usage('btid task step new <id> --name <text>', context.out, context.json)
         result = handle.addStep(name)
-        message = `step add ${id}`
+        message = `step new ${id}`
         break
       }
       case 'rename': {

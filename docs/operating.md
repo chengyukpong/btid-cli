@@ -224,10 +224,10 @@ A label a task brings still joins its project, exactly as an edit's would; remov
 other tasks may use it.
 
 ```console
-$ btid task step add alpha-jbbs --name "Measure the header at 1440"
+$ btid task step new alpha-jbbs --name "Measure the header at 1440"
 step  alpha-jbbs   0/1 done
   1. [ ] st-a1b2  Measure the header at 1440
-$ btid task step add alpha-jbbs --name "Sketch the fix"
+$ btid task step new alpha-jbbs --name "Sketch the fix"
 step  alpha-jbbs   0/2 done
   1. [ ] st-a1b2  Measure the header at 1440
   2. [ ] st-c3d4  Sketch the fix
@@ -246,7 +246,8 @@ position — the number changes when one is removed. (STEP_NOT_FOUND)
 The number on the left is for reading only. Position is where a step happens to sit — removing one shifts every number after
 it — so the id (`st-` plus four characters) is the address, minted once and kept through renames.
 
-Ticking a step that is already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
+Creation is `new`, like every other creator in this CLI; `btid task step add` is accepted as a synonym. Ticking a step that is
+already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
 that re-runs must not have to read first. Every one of these is the same task write as an edit: same permission check, same
 revision bump, same activity log.
 

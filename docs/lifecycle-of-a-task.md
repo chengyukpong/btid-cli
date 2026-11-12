@@ -147,7 +147,7 @@ A new label joins the project's vocabulary in the same commit; removing one leav
 **Steps are added and ticked by id**, never by position — a position changes when another step is removed:
 
 ```console
-$ btid task step add alpha-n7qk --name "Measure the header at 1440"
+$ btid task step new alpha-n7qk --name "Measure the header at 1440"
 step  alpha-n7qk   0/1 done
   1. [ ] st-a1b2  Measure the header at 1440
 $ btid task step done alpha-n7qk st-a1b2
@@ -155,7 +155,7 @@ step  alpha-n7qk   1/1 done
   1. [x] st-a1b2  Measure the header at 1440
 ```
 
-`rename`, `undo` and `remove` take the same address. Ticking a step that is already done prints `unchanged` and writes nothing.
+`new` is the creator, like every other creator here; `rename`, `undo` and `remove` take the same address. Ticking a step that is already done prints `unchanged` and writes nothing.
 
 ### The ordinary edits, and the one rule that bites
 
@@ -238,7 +238,7 @@ btid task promote alpha-n7qk
 # 5. work
 btid task label add alpha-n7qk ui
 btid task label add alpha-n7qk billing
-btid task step add alpha-n7qk --name "Measure the header at 1440"
+btid task step new alpha-n7qk --name "Measure the header at 1440"
 btid task step done alpha-n7qk st-a1b2
 btid task edit alpha-n7qk --status in_progress
 btid task edit alpha-n7qk --percent 40
