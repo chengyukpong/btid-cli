@@ -874,6 +874,7 @@ const taskStep: Verb = {
     const handle = context.store.task(id)
     let result
     let message: string
+    let removed: { id: string; name: string } | undefined
     switch (action) {
       case 'new':
       case 'add': {
@@ -899,6 +900,7 @@ const taskStep: Verb = {
       }
       default: {
         if (ref === undefined) return usage('btid task step remove <id> <step-id>', context.out, context.json)
+        removed = before?.steps.find((step) => step.id === ref.trim())
         result = handle.removeStep(ref)
         message = `step remove ${id} ${ref}`
       }
@@ -912,6 +914,8 @@ const taskStep: Verb = {
     if (context.json) context.out.json(result.value)
     else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${action} ${ref ?? name}`)
     else {
+      // Nothing is gone silently: the removed step is named, with the id and the name that would recreate it.
+      if (removed !== undefined) context.out.line(`removed  ${removed.id}  "${removed.name}"`)
       const total = result.value.steps.length
       const done = result.value.steps.filter((step) => step.done).length
       // The id is printed because it is the only thing that addresses a step; the number is for reading.

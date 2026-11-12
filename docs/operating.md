@@ -246,6 +246,25 @@ position — the number changes when one is removed. (STEP_NOT_FOUND)
 The number on the left is for reading only. Position is where a step happens to sit — removing one shifts every number after
 it — so the id (`st-` plus four characters) is the address, minted once and kept through renames.
 
+**`done` and `undo` are each other's inverse** — the state is a boolean, so nothing is lost either way:
+
+```console
+$ btid task step done alpha-n7qk st-a1b2        # 1/2 done
+$ btid task step undo alpha-n7qk st-a1b2        # 0/2 done
+```
+
+**`label remove` is recoverable by name** (`label add ui`), because a label *is* its text.
+
+**`step remove` is not recoverable in the CLI**, and the transcript says what went so it can be put back:
+
+```console
+$ btid task step remove alpha-n7qk st-c3d4
+removed  st-c3d4  "Draft the 1440 measurement"
+```
+
+The real undo is the store itself: every command is one commit, so a removed step (or task) can be brought back on a clone with
+`git revert <commit>`, then `btid cache clear` and a read. The CLI has no history of its own, on purpose — the store does.
+
 Creation is `new`, like every other creator in this CLI; `btid task step add` is accepted as a synonym. Ticking a step that is
 already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
 that re-runs must not have to read first. Every one of these is the same task write as an edit: same permission check, same

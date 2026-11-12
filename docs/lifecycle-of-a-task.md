@@ -155,7 +155,21 @@ step  alpha-n7qk   1/1 done
   1. [x] st-a1b2  Measure the header at 1440
 ```
 
-`new` is the creator, like every other creator here; `rename`, `undo` and `remove` take the same address. Ticking a step that is already done prints `unchanged` and writes nothing.
+`new` is the creator, like every other creator here; `rename` and `remove` take the same address.
+
+**`done` and `undo` are inverses**, so a step can be reopened without retyping it:
+
+```console
+$ btid task step done alpha-n7qk st-a1b2
+step  alpha-n7qk   1/1 done
+  1. [x] st-a1b2  Measure the header at 1440
+$ btid task step undo alpha-n7qk st-a1b2
+step  alpha-n7qk   0/1 done
+  1. [ ] st-a1b2  Measure the header at 1440
+```
+
+And `step remove` names what it removed (`removed  st-c3d4  "Draft the 1440 measurement"`), because a removal has no inverse in
+the CLI — the store's commits are the undo. Ticking a step that is already done prints `unchanged` and writes nothing.
 
 ### The ordinary edits, and the one rule that bites
 
@@ -240,6 +254,7 @@ btid task label add alpha-n7qk ui
 btid task label add alpha-n7qk billing
 btid task step new alpha-n7qk --name "Measure the header at 1440"
 btid task step done alpha-n7qk st-a1b2
+btid task step undo alpha-n7qk st-a1b2
 btid task edit alpha-n7qk --status in_progress
 btid task edit alpha-n7qk --percent 40
 btid task edit alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
@@ -250,7 +265,7 @@ btid task edit alpha-n7qk --tracked on --end 2026-11-16 --note "The header spec 
 btid task edit alpha-n7qk --status done --percent 100
 ```
 
-Fourteen commands, fourteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
+Fifteen commands, fifteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
 do, not steps of the life.
 
 ## Where the row stands
@@ -267,10 +282,10 @@ alpha-n7qk  Check the header budgets
 | status | backlog | backlog | backlog | todo | **done** |
 | stage | unclaimed | claimed | claimed | promoted | promoted |
 | firstPromotedAt | — | — | — | set | **unchanged** |
-| rev | 0 | 1 | 2 | 3 | **13** |
-| commits | 1 | 2 | 3 | 4 | **14** |
+| rev | 0 | 1 | 2 | 3 | **14** |
+| commits | 1 | 2 | 3 | 4 | **15** |
 
-One command, one commit: fourteen commands, fourteen commits, each named after the verb and the row — `capture alpha-n7qk`,
+One command, one commit: fifteen commands, fifteen commits, each named after the verb and the row — `capture alpha-n7qk`,
 `promote alpha-n7qk`, `edit alpha-n7qk`, `label alpha-n7qk ui`, `step add alpha-n7qk`. `git log` in the store is the audit trail, and the row's own `activities` is the same
 story told per field.
 
