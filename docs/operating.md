@@ -206,6 +206,46 @@ Nothing is settable only by editing JSON. The three `edit` verbs cover the three
 | `project edit` | `--name --start --end --description --status --color --members --labels` |
 | `person edit` | `--name --handle --role --active` |
 
+**Labels and steps change one at a time.** `--labels` replaces the whole list, which is the wrong tool for "this task is also
+urgent" and a dangerous one when two people edit at once; `--file` is gone. So:
+
+```console
+$ btid task label add alpha-jbbs ui
+labeled    alpha-jbbs   ui   ui
+$ btid task label add alpha-jbbs billing
+labeled    alpha-jbbs   billing   ui, billing
+$ btid task label add alpha-jbbs billing        # already there: no write, and it says so
+unchanged  alpha-jbbs   billing
+$ btid task label remove alpha-jbbs ui
+unlabeled  alpha-jbbs   ui   billing
+```
+
+A label a task brings still joins its project, exactly as an edit's would; removing it never takes it off the project, because
+other tasks may use it.
+
+```console
+$ btid task step add alpha-jbbs --name "Measure the header at 1440"
+step  alpha-jbbs   0/1 done
+  [ ] 1. Measure the header at 1440
+$ btid task step add alpha-jbbs --name "Sketch the fix"
+step  alpha-jbbs   0/2 done
+  [ ] 1. Measure the header at 1440
+  [ ] 2. Sketch the fix
+$ btid task step done alpha-jbbs 1              # by position…
+step  alpha-jbbs   1/2 done
+  [x] 1. Measure the header at 1440
+  [ ] 2. Sketch the fix
+$ btid task step rename alpha-jbbs 2 --name "Sketch the fix, in pencil"
+$ btid task step undo alpha-jbbs 1              # a step can be reopened
+$ btid task step remove alpha-jbbs 2
+$ btid task step done alpha-jbbs 9              # …or by id, and this one is not there
+refused: No step “9” on alpha-jbbs. It has: 1. Measure the header at 1440; 2. Sketch the fix, in pencil. (STEP_NOT_FOUND)
+```
+
+Ticking a step that is already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
+that re-runs must not have to read first. Every one of these is the same task write as an edit: same permission check, same
+revision bump, same activity log.
+
 **Deleting** exists for all three types, and asks first — `--yes` is required, because deleting is the one action with no undo:
 
 ```console

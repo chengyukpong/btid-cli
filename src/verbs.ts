@@ -806,6 +806,122 @@ const plan: Verb = {
   },
 }
 
+const labelActions = new Set(['add', 'remove'])
+
+/**
+ * `btid task label add <id> <label>` / `remove`.
+ *
+ * The `--labels` flag on `task edit` replaces the whole list, which is the wrong tool for "this task is also urgent" and a
+ * dangerous one when two people edit at once. These two change one label, and say `unchanged` when the row already agrees —
+ * a script that re-runs must not have to read first.
+ */
+const taskLabel: Verb = {
+  name: 'task label',
+  summary: 'Add or remove one label on a task. Adding a new one lets the project learn it.',
+  usage: 'btid task label <add|remove> <id> <label> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const [action, id, label] = [context.args[0], context.args[1], context.args[2]]
+    if (action === undefined || !labelActions.has(action) || id === undefined || label === undefined) {
+      return usage('btid task label <add|remove> <id> <label>', context.out, context.json)
+    }
+
+    const before = context.store.task(id).row
+    const result =
+      action === 'add' ? context.store.task(id).addLabel(label) : context.store.task(id).removeLabel(label)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `${action === 'add' ? 'label' : 'unlabel'} ${id} ${label}`)
+    if (committed !== null && committed !== 0) return committed
+
+    if (context.json) context.out.json(result.value)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${label}`)
+    else {
+      context.out.line(
+        `${action === 'add' ? 'labeled  ' : 'unlabeled'}  ${result.value.taskId}   ${label}   ${
+          result.value.labels.length === 0 ? 'no labels' : result.value.labels.join(', ')
+        }`,
+      )
+    }
+    return 0
+  },
+}
+
+const stepActions = new Set(['add', 'rename', 'done', 'undo', 'remove'])
+
+/**
+ * `btid task step add|rename|done|undo|remove <id> …`
+ *
+ * A step is addressed by its id or by its 1-based position (`btid task step done alpha-a1b2 2`), because a person reads the
+ * list and a script holds the id. Ticking one that is already done says `unchanged` and writes nothing.
+ */
+const taskStep: Verb = {
+  name: 'task step',
+  summary: 'Add, rename, tick, untick or remove one step of a task.',
+  usage:
+    'btid task step <add|rename|done|undo|remove> <id> [step] [--name text] [--json] [--dry-run]',
+  flags: { name: 'value', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const [action, id, ref] = [context.args[0], context.args[1], context.args[2]]
+    const name = stringFlag(context.flags, 'name')
+    if (action === undefined || !stepActions.has(action) || id === undefined) {
+      return usage('btid task step <add|rename|done|undo|remove> <id> [step] [--name text]', context.out, context.json)
+    }
+
+    const before = context.store.task(id).row
+    const handle = context.store.task(id)
+    let result
+    let message: string
+    switch (action) {
+      case 'add': {
+        if (name === null) return usage('btid task step add <id> --name <text>', context.out, context.json)
+        result = handle.addStep(name)
+        message = `step add ${id}`
+        break
+      }
+      case 'rename': {
+        if (ref === undefined || name === null) {
+          return usage('btid task step rename <id> <step> --name <text>', context.out, context.json)
+        }
+        result = handle.renameStep(ref, name)
+        message = `step rename ${id} ${ref}`
+        break
+      }
+      case 'done':
+      case 'undo': {
+        if (ref === undefined) return usage(`btid task step ${action} <id> <step>`, context.out, context.json)
+        result = handle.setStepDone(ref, action === 'done')
+        message = `step ${action} ${id} ${ref}`
+        break
+      }
+      default: {
+        if (ref === undefined) return usage('btid task step remove <id> <step>', context.out, context.json)
+        result = handle.removeStep(ref)
+        message = `step remove ${id} ${ref}`
+      }
+    }
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, message)
+    if (committed !== null && committed !== 0) return committed
+
+    if (context.json) context.out.json(result.value)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${action} ${ref ?? name}`)
+    else {
+      const total = result.value.steps.length
+      const done = result.value.steps.filter((step) => step.done).length
+      const listed = result.value.steps.map((step, index) => `${step.done ? '[x]' : '[ ]'} ${index + 1}. ${step.name}`)
+      context.out.line(`step  ${result.value.taskId}   ${total === 0 ? 'no steps' : `${done}/${total} done`}`)
+      for (const line of listed) context.out.line(`  ${line}`)
+    }
+    return 0
+  },
+}
+
 // --- cache --------------------------------------------------------------------------
 
 const cacheShow: Verb = {
@@ -921,6 +1037,8 @@ const version: Verb = {
 export const VERBS: readonly Verb[] = [
   taskLs,
   taskShow,
+  taskLabel,
+  taskStep,
   taskPromote,
   taskRemove,
   taskNew,
