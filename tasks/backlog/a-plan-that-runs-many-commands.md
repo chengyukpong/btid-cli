@@ -25,8 +25,9 @@ This is the **Command pattern at the CLI's edge**: the verbs already are command
 one registry), so what is missing is the *invoker* — something that reads a list of them, in order, against one opened store,
 and reports what happened. No rule moves into the plan file; a step is a call, never a condition.
 
-It is also the missing half of the speed work: `--file` batches *one verb over many rows*; a plan runs *many verbs over one
-store*, which is the only way to stop paying the ~2.5 s fixed cost per command.
+It is also the missing half of the speed work: `--file` batches *one creator over many rows*; a plan runs *many verbs over one
+store*, which is the only way to stop paying the ~2.5 s fixed cost per command. The edits' own `--file` was removed for this
+reason — a list of changes in sequence is a plan, not a second list format on `edit`.
 
 ## The file
 

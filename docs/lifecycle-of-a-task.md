@@ -228,7 +228,8 @@ today, but no CLI verb writes them.
 
 ## The same life, written as a script
 
-Because every edit takes `--file`, the middle of this — claim, ready, work — is one command when there are several tasks:
+An edit changes one row, so the middle of this — claim, ready, work — is one command per task. (The list form was removed on
+purpose: several changes in sequence are a plan's job, and that verb is designed and not yet built.)
 
 ```json
 [
@@ -239,14 +240,14 @@ Because every edit takes `--file`, the middle of this — claim, ready, work —
 ```
 
 ```console
-$ btid task edit --file ready.json
+$ btid task edit alpha-n7qk --estimate 4 --dod "Both header columns line up at 1440 and 1280."
 edited  alpha-n7qk   rev 2
 $ btid task promote alpha-n7qk
 promoted  alpha-n7qk   todo   rev 3
 ```
 
-A single object is a one-item list, so a script editing exactly one task needs no brackets. Promotion has no file form yet;
-it is one row at a time (`task promote <id>`), which is the next thing to add if seeds of twenty tasks become normal.
+Promotion has no file form either; it is one row at a time, which is the next thing a plan would change if seeds of twenty
+tasks become normal.
 
 ## What the run actually showed (2026-11-11T18:55)
 

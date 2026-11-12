@@ -77,48 +77,6 @@ const taskColumns: readonly Column<Task>[] = [
   { title: 'TITLE', value: (row) => row.title },
 ]
 
-/** One change, as both a flag-driven verb and a `--file` item produce it. */
-interface EditItem {
-  id: string
-  patch: Record<string, unknown>
-  note?: string
-}
-
-/**
- * The `--file` shape for an edit: the core's own input, one per line.
- *
- * `{"id": "alpha-a1b2", "patch": {"endDate": "2026-11-20"}, "note": "Client moved it."}`
- *
- * It is deliberately the command's input rather than a second dialect: the same object `store.updateTasks` takes, so a file
- * is a list of calls, not a schema of its own.
- */
-function readEdits(context: VerbContext, file: string): { items: EditItem[] } | { message: string } {
-  let items: BatchItem[]
-  try {
-    items = readBatch(file)
-  } catch (error) {
-    return { message: error instanceof Error ? error.message : String(error) }
-  }
-
-  const edits: EditItem[] = []
-  for (const [index, item] of items.entries()) {
-    const at = index + 1
-    if (!has(item, 'id')) return { message: `item ${at} has no id.` }
-    const id = String(item['id'] ?? '')
-    const patch = item['patch']
-    if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
-      return { message: `item ${at} has no "patch" object.` }
-    }
-    const note = textOf(item, 'note')
-    edits.push({ id, patch: patch as Record<string, unknown>, ...(note === null ? {} : { note }) })
-  }
-  return { items: edits }
-}
-
-/** `edit <id>` for one, `edit 3 tasks` for several: the commit message a batch deserves. */
-const editMessage = (items: readonly EditItem[], noun: string, prefix = 'edit'): string =>
-  items.length === 1 ? `${prefix} ${items[0]!.id}` : `${prefix} ${items.length} ${noun}`
-
 /** The `--note` flag, if there is one: the one field an edit takes outside its patch. */
 const noteOf = (context: VerbContext): { note?: string } => {
   const note = stringFlag(context.flags, 'note')
@@ -329,9 +287,9 @@ const taskPromote: Verb = {
 
 const taskEdit: Verb = {
   name: 'task edit',
-  summary: 'Change a task, or a list of them from --file, in one commit.',
+  summary: 'Change one task. A tracked end day needs --note.',
   usage:
-    'btid task edit (<id> [fields] | --file <path|->) [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
+    'btid task edit <id> [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
   flags: {
     title: 'value',
     description: 'value',
@@ -350,46 +308,37 @@ const taskEdit: Verb = {
     'blocked-by': 'value',
     labels: 'value',
     note: 'value',
-    file: 'value',
     'dry-run': 'boolean',
   },
   writes: true,
   async run(context) {
-    const file = stringFlag(context.flags, 'file')
-    let items: EditItem[]
+    const id = context.args[0]
+    if (id === undefined) return usage('btid task edit <id>', context.out, context.json)
 
-    if (file !== null) {
-      const read = readEdits(context, file)
-      if ('message' in read) return usage(read.message, context.out, context.json)
-      items = read.items
-    } else {
-      const id = context.args[0]
-      if (id === undefined) return usage('btid task edit <id>', context.out, context.json)
-      const built = taskPatchFromFlags(context)
-      if ('message' in built) return usage(built.message, context.out, context.json)
-      if (Object.keys(built.patch).length === 0) {
-        return usage(
-          `btid task edit needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {})
-            .filter((flag) => flag !== 'dry-run' && flag !== 'note' && flag !== 'file')
-            .map((flag) => `--${flag}`)
-            .join(', ')}.`,
-          context.out,
-          context.json,
-        )
-      }
-      items = [{ id, patch: built.patch, ...noteOf(context) }]
+    const built = taskPatchFromFlags(context)
+    if ('message' in built) return usage(built.message, context.out, context.json)
+    if (Object.keys(built.patch).length === 0) {
+      return usage(
+        `btid task edit needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {})
+          .filter((flag) => flag !== 'dry-run' && flag !== 'note')
+          .map((flag) => `--${flag}`)
+          .join(', ')}.`,
+        context.out,
+        context.json,
+      )
     }
 
-    // One call either way: a single edit is a one-item batch, so there is one code path and one commit per command.
-    const result = context.store.updateTasks(items as Parameters<Store['updateTasks']>[0])
-    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
+    // The core's update command still takes a list — a plan will use that — but the verb edits one row, so the list here has
+    // exactly one item and a refusal needs no item number.
+    const result = context.store.updateTasks([{ id, patch: built.patch, ...noteOf(context) }] as Parameters<Store['updateTasks']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: false })
 
-    const rows = result.value.map((handle) => handle.row!)
-    const committed = await commit(context, editMessage(items, 'tasks'))
+    const row = result.value[0]!.row!
+    const committed = await commit(context, `edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
-    if (context.json) context.out.json(rows)
-    else for (const row of rows) context.out.line(`edited  ${row.taskId}   rev ${row.rev}`)
+    if (context.json) context.out.json(row)
+    else context.out.line(`edited  ${row.taskId}   rev ${row.rev}`)
     return 0
   },
 }
@@ -578,9 +527,9 @@ async function startBatch(context: VerbContext, file: string): Promise<number> {
 
 const projectEdit: Verb = {
   name: 'project edit',
-  summary: 'Change a project, or a list of them from --file, in one commit. The manager’s act.',
+  summary: 'Change one project. The manager’s act.',
   usage:
-    'btid project edit (<id> [fields] | --file <path|->) [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
+    'btid project edit <id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
   flags: {
     name: 'value',
     start: 'value',
@@ -590,38 +539,28 @@ const projectEdit: Verb = {
     color: 'value',
     members: 'value',
     labels: 'value',
-    file: 'value',
     'dry-run': 'boolean',
   },
   writes: true,
   async run(context) {
-    const file = stringFlag(context.flags, 'file')
-    let items: EditItem[]
+    const id = context.args[0]
+    if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
 
-    if (file !== null) {
-      const read = readEdits(context, file)
-      if ('message' in read) return usage(read.message, context.out, context.json)
-      items = read.items
-    } else {
-      const id = context.args[0]
-      if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
-      const built = projectPatchFromFlags(context)
-      if ('message' in built) return usage(built.message, context.out, context.json)
-      if (Object.keys(built.patch).length === 0) {
-        return usage('btid project edit needs at least one field to change', context.out, context.json)
-      }
-      items = [{ id, patch: built.patch }]
+    const built = projectPatchFromFlags(context)
+    if ('message' in built) return usage(built.message, context.out, context.json)
+    if (Object.keys(built.patch).length === 0) {
+      return usage('btid project edit needs at least one field to change', context.out, context.json)
     }
 
-    const result = context.store.updateProjects(items as Parameters<Store['updateProjects']>[0])
-    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
+    const result = context.store.updateProjects([{ id, patch: built.patch }] as Parameters<Store['updateProjects']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: false })
 
-    const rows = result.value.map((handle) => handle.row!)
-    const committed = await commit(context, editMessage(items, 'projects', 'project edit'))
+    const row = result.value[0]!.row!
+    const committed = await commit(context, `project edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
-    if (context.json) context.out.json(rows)
-    else for (const row of rows) context.out.line(`edited  ${row.id}   ${row.name}`)
+    if (context.json) context.out.json(row)
+    else context.out.line(`edited  ${row.id}   ${row.name}`)
     return 0
   },
 }
@@ -759,43 +698,30 @@ async function joinBatch(context: VerbContext, file: string): Promise<number> {
 
 const personEdit: Verb = {
   name: 'person edit',
-  summary: 'Change somebody, or a list of them from --file, in one commit. The manager’s act.',
+  summary: 'Change one person. The manager’s act.',
   usage:
-    'btid person edit (<id> [fields] | --file <path|->) [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
-  flags: { name: 'value', handle: 'value', role: 'value', active: 'value', file: 'value', 'dry-run': 'boolean' },
+    'btid person edit <id> [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
+  flags: { name: 'value', handle: 'value', role: 'value', active: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const file = stringFlag(context.flags, 'file')
-    let items: EditItem[]
+    const id = context.args[0]
+    if (id === undefined) return usage('btid person edit <id>', context.out, context.json)
 
-    if (file !== null) {
-      const read = readEdits(context, file)
-      if ('message' in read) return usage(read.message, context.out, context.json)
-      items = read.items
-    } else {
-      const id = context.args[0]
-      if (id === undefined) return usage('btid person edit <id>', context.out, context.json)
-      const built = personPatchFromFlags(context)
-      if ('message' in built) return usage(built.message, context.out, context.json)
-      if (Object.keys(built.patch).length === 0) {
-        return usage('btid person edit needs at least one field to change', context.out, context.json)
-      }
-      items = [{ id, patch: built.patch }]
+    const built = personPatchFromFlags(context)
+    if ('message' in built) return usage(built.message, context.out, context.json)
+    if (Object.keys(built.patch).length === 0) {
+      return usage('btid person edit needs at least one field to change', context.out, context.json)
     }
 
-    const result = context.store.updatePersons(items as Parameters<Store['updatePersons']>[0])
-    if (!result.ok) return refusal(result, context.out, context.json, { index: items.length > 1 })
+    const result = context.store.updatePersons([{ id, patch: built.patch }] as Parameters<Store['updatePersons']>[0])
+    if (!result.ok) return refusal(result, context.out, context.json, { index: false })
 
-    const rows = result.value.map((handle) => handle.row!)
-    const committed = await commit(context, editMessage(items, 'people', 'person edit'))
+    const row = result.value[0]!.row!
+    const committed = await commit(context, `person edit ${id}`)
     if (committed !== null && committed !== 0) return committed
 
-    if (context.json) context.out.json(rows)
-    else {
-      for (const row of rows) {
-        context.out.line(`edited  ${row.id}   ${row.displayName}   ${row.role}${row.active ? '' : ' (inactive)'}`)
-      }
-    }
+    if (context.json) context.out.json(row)
+    else context.out.line(`edited  ${row.id}   ${row.displayName}   ${row.role}${row.active ? '' : ' (inactive)'}`)
     return 0
   },
 }

@@ -134,7 +134,7 @@ autosave and no batch: a verb that succeeds has already written, and a verb that
 
 ### Seed a store in three commands
 
-A store is not useful until it has a project, a roster and a dozen tasks, so every `new` `--file` takes one of three shapes —
+A store is not useful until it has a project, a roster and a dozen tasks, so every `new` takes `--file`: one of three shapes —
   a JSON array of items, **a single item object** (a one-item list, so a script changing one row needs no brackets), or
   `{"items": [...]}` — and `-` for stdin. **One command, one commit**, and `--dry-run` works. The same three shapes serve
   every `edit`.
@@ -176,7 +176,7 @@ Nothing is settable only by editing JSON. The three `edit` verbs cover the three
 
 | verb | flags |
 |---|---|
-| `task edit` | `<id>` + `--title --description --dod --status --priority --assignee --start --end --percent --estimate --tracked --small --blocked --blocked-reason --blocked-by --labels` (+ `--note` for a tracked end-day move), **or `--file` for a list** |
+| `task edit` | `<id>` + `--title --description --dod --status --priority --assignee --start --end --percent --estimate --tracked --small --blocked --blocked-reason --blocked-by --labels` (+ `--note` for a tracked end-day move) |
 | `project edit` | `--name --start --end --description --status --color --members --labels` |
 | `person edit` | `--name --handle --role --active` |
 
@@ -198,16 +198,8 @@ A person who has left is **deactivated** (`person edit --active off`), not delet
 an owner would leave rows naming a ghost. And the two reads a plan uses to reuse an existing row exist too — `project show <id>`,
 `person show <id|handle>` — alongside `task show`.
 
-**Every `edit` also takes `--file`**: an array of `{"id": "alpha-a1b2", "patch": {…}, "note": "…"}`, applied as one command and
-one commit. It is the core's own update input, not a second dialect — and a single edit is a one-item batch internally, so
-there is one code path:
-
-```console
-$ btid task edit --file edits.json
-edited  alpha-a1b2   rev 2
-edited  alpha-c3d4   rev 1
-2 tasks in one commit
-```
+**An `edit` changes one row.** `--file` belongs to the three `new` verbs — many rows of one type, one commit — and an edit
+takes an id and its fields. Changing several rows is what a plan is for; until it exists, that is one command each.
 
 `none` clears a nullable field (`--estimate none`, `--labels none`, `--start none`). On/off flags take `on` or `off` — a bare
 flag cannot say whether you meant to set or clear.

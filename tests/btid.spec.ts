@@ -319,14 +319,6 @@ describe('btid', () => {
     assert.equal(client.messages[0], 'capture 2 tasks')
   })
 
-  it('takes a single edit as one object too', async () => {
-    const path = await batchFile('one-edit.json', { id: 'alpha-a1b2', patch: { percentComplete: 30 } })
-    const code = await btid(['task', 'edit', '--file', path])
-    assert.equal(code, 0, lines.text)
-    assert.equal(client.messages[0], 'edit alpha-a1b2')
-    assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['percentComplete'], 30)
-  })
-
   it('refuses an empty list, because a file with nothing in it is a mistake', async () => {
     const path = await batchFile('empty.json', [])
     const code = await btid(['task', 'new', '--file', path])
@@ -434,7 +426,7 @@ describe('btid', () => {
   it('answers --help on a verb without touching the store', async () => {
     const code = await btid(['task', 'edit', '--help'])
     assert.equal(code, 0)
-    assert.match(lines.text, /btid task edit \(<id>|--file/)
+    assert.match(lines.text, /btid task edit <id>/)
     assert.equal(client.messages.length, 0)
   })
 
@@ -465,64 +457,6 @@ describe('btid', () => {
     assert.equal(roster['role'], 'manager')
     assert.equal(roster['active'], false)
     assert.equal(roster['id'], 'ivan', 'the id is not re-slugged')
-  })
-
-  it('edits a list of tasks from --file, in one commit', async () => {
-    const path = await batchFile('edits.json', [
-      { id: 'alpha-a1b2', patch: { percentComplete: 40, title: 'Renamed' } },
-      { id: 'alpha-a1b2', patch: { percentComplete: 80 } },
-    ])
-    const code = await btid(['task', 'edit', '--file', path])
-    assert.equal(code, 0, lines.text)
-    assert.equal(client.messages.length, 1, 'one commit for the list')
-    assert.equal(client.messages[0], 'edit 2 tasks')
-    const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
-    assert.equal(row['title'], 'Renamed')
-    assert.equal(row['percentComplete'], 80, 'the second item saw the first')
-  })
-
-  it('says which item of an edit list refused, and writes nothing', async () => {
-    const path = await batchFile('bad-edits.json', [
-      { id: 'alpha-a1b2', patch: { percentComplete: 10 } },
-      { id: 'alpha-a1b2', patch: { endDate: '2026-11-20' } },
-    ])
-    const code = await btid(['task', 'edit', '--file', path, '--json'])
-    assert.equal(code, 1)
-    assert.deepEqual(lines.json[0], {
-      error: {
-        kind: 'refused',
-        code: 'END_DATE_NEEDS_REASON',
-        message: 'Changing the end day of a tracked task needs a reason.',
-        at: 2,
-      },
-    })
-    assert.equal(client.messages.length, 0)
-    assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['percentComplete'], 0)
-  })
-
-  it('edits projects and people from --file too', async () => {
-    // The roster is written before the first command, not between two: a store mutated behind a snapshot's back is a store
-    // the snapshot is right to disbelieve, and that would be the test lying rather than the CLI misbehaving.
-    client.put('people.json', {
-      chengyukpong: managerRow,
-      ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
-    })
-    const projects = await batchFile('project-edits.json', [
-      { id: 'alpha', patch: { color: '#FF8800' } },
-      { id: 'alpha', patch: { labels: ['ui'] } },
-    ])
-    assert.equal(await btid(['project', 'edit', '--file', projects]), 0, lines.text)
-    assert.equal(client.messages.at(-1), 'project edit 2 projects')
-
-    const people = await batchFile('people-edits.json', [
-      { id: 'ivan', patch: { displayName: 'Ivan Ivanovich' } },
-      { id: 'ivan', patch: { role: 'manager' } },
-    ])
-    assert.equal(await btid(['person', 'edit', '--file', people]), 0, lines.text)
-    assert.equal(client.messages.at(-1), 'person edit 2 people')
-    const ivan = client.json('people.json')['ivan']!
-    assert.equal(ivan['displayName'], 'Ivan Ivanovich')
-    assert.equal(ivan['role'], 'manager')
   })
 
   it('promotes a backlog item onto the board, in one commit', async () => {
