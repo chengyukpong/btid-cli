@@ -30,6 +30,12 @@ A read keeps a **snapshot** of the store beside the commit it was read at — th
 tab — so the next command asks for the branch head and nothing else. `docs/operating.md` has the table; `--fresh` and
 `BTID_NO_CACHE=1` are the escapes.
 
+## The grammar
+
+**[docs/grammar.md](docs/grammar.md)** — `btid <verb> <path> [data]`. Fourteen verbs, a path tree, and data always named:
+`promote task/alpha-n7qk`, `add task/alpha-n7qk/label ui`, `done task/alpha-n7qk/step/st-a1b2`. Settled 2026-11-12; the CLI
+on this machine still speaks the older `task promote alpha-n7qk` until 0.12.0 ships.
+
 ## One task, end to end
 
 [`docs/lifecycle-of-a-task.md`](docs/lifecycle-of-a-task.md) follows a single imaginary task from `task new` to `task edit
