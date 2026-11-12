@@ -72,10 +72,35 @@ A variable is the **result** of its step, and every verb already returns somethi
 | `task edit`, `project edit`, `person edit` | the row as written — `$task.rev` is the revision it reached |
 | `task promote` | the row as promoted — `$task.status` is the column it landed in |
 | `task remove` | `{ id, removed: true }` — the id of what is gone, and nothing else, because nothing else is true any more |
-| a read (`ls`, `show`, `whoami`) | its result; binding one is allowed but rarely useful |
+| a read (`ls`, `show`, `whoami`) | its result: `task show` → the row; `task ls` → `{ total, rows }`; `whoami` → `{ handle, actor, people, projects }` |
 
 That is why `$task.id` and not `$task`: the second would have to *mean* one of twenty-nine fields, and the one it meant would be
 a decision this file made on the reader's behalf.
+
+## Reads are steps too
+
+A plan is a program, and a program worth reading says what it saw. Every read verb is a step on the same terms as a write:
+
+```
+let task = task new --project alpha --title "Header budgets"
+           task edit $task.id --estimate 4 --dod "Both columns line up."
+           task show $task.id                         # what it looks like mid-plan
+           task promote $task.id
+let after = task show $task.id
+           task ls projectId=alpha status=todo          # and what the board looks like now
+```
+
+- **A read never commits** — under `--commit=each` it writes nothing, and under `--commit=end` it is not part of the one commit.
+- **It prints.** Text mode prints the verb's normal output, in place, so the plan narrates itself; `--quiet` reduces every step to
+  one line (`4  task show  ok`) and keeps the transcript scannable. `--json` emits the step and its result together:
+  `{"step":4,"verb":"task show","ok":true,"result":{…}}`.
+- **It can be bound**, and that is why reads are in scope: `let after = task promote $task.id` followed by `$after.status` is how a
+  later step can *say* where the task stands without the plan computing anything.
+- **A list binds `{ total, rows }`** — `$todos.total` is a number you can interpolate; `$todos.rows` is refused
+  (*"a field holding a list cannot be interpolated — bind a single row with `task show` instead"*), because there is no sensible
+  way to put forty rows into one flag value.
+- **`--dry-run` runs nothing**, reads included: a dry run must not need the network to tell you what it would do. `btid plan
+  check` is the parse-only pass; a plan that wants to *assert* state is a later feature, not this one.
 
 ## Identity: one login, never switched
 
