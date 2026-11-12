@@ -40,10 +40,10 @@ store has not minted yet.
     { "let": "ivan", "verb": "person new", "args": ["ivan"], "flags": { "displayName": "Ivan" } },
     { "verb": "project new", "args": ["alpha", "Alpha One"], "flags": { "start": "2026-11-03", "end": "2026-12-18" } },
     { "let": "task", "verb": "task new", "flags": { "project": "alpha", "title": "Header budgets" } },
-    { "verb": "task edit", "args": [{ "$ref": "task" }],
+    { "verb": "task edit", "args": [{ "$ref": "task.id" }],
       "flags": { "assignee": "ivan", "start": "2026-11-09", "end": "2026-11-13", "estimate": 4,
                  "dod": "Both header columns line up." } },
-    { "verb": "task promote", "args": [{ "$ref": "task" }] }
+    { "verb": "task promote", "args": [{ "$ref": "task.id" }] }
   ]
 }
 ```
@@ -53,12 +53,29 @@ Rules for the file, and they are the whole of its grammar:
 - **`verb`** is one of the sixteen in `btid help --json`, spelled exactly as there. An unknown verb is a usage error *before
   anything runs* — the plan is checked completely, then executed.
 - **`args`** and **`flags`** are the verb's own, so a plan is a call list, not a dialect.
-- **`let`** binds the id of the row this step creates to a variable later steps can use. Not `as` (which reads as *act as* —
-  identity is the one thing a plan may not touch, below) and not `name` (which reads as a field, and every row type has one).
-  `let` can only be read one way: *this id is now called that*.
-- **`{"$ref": "name"}`** resolves to that row's id (`alpha-n7qk`, `ivan`, `alpha`). Nothing else is dynamic — no expressions,
-  no field lookups — because a plan that computes is a language, and this project does not need another one.
+- **`let`** binds **the whole result** of the step — for a create, edit or promote, the row it wrote — to a variable later
+  steps can read. Not `as` (which reads as *act as* — identity is the one thing a plan may not touch, below) and not `name`
+  (which reads as a field, and every row type has one). `let` reads one way only: *this result is now called that*.
+- **`{"$ref": "name.field"}`** reads one field of that result. `$task.id` is an id; `$task.status` is where the row stands;
+  `$person.id` is a person's slug. One segment, a field the row actually has, resolved against **the row the step returned** —
+  no nesting, no arithmetic, no functions. A field that does not exist is a failure **at the step that names it, before that
+  step's request**, listing the fields the row does have (the same courtesy `--fields` gives).
 - A **single object** instead of `steps` is a one-step plan, matching `--file`'s courtesy.
+
+## What a binding holds
+
+A variable is the **result** of its step, and every verb already returns something worth naming:
+
+| step | binds |
+|---|---|
+| `task new`, `person new`, `project new` | the row it created — `$task.id`, `$task.status`, `$task.title` |
+| `task edit`, `project edit`, `person edit` | the row as written — `$task.rev` is the revision it reached |
+| `task promote` | the row as promoted — `$task.status` is the column it landed in |
+| `task remove` | `{ id, removed: true }` — the id of what is gone, and nothing else, because nothing else is true any more |
+| a read (`ls`, `show`, `whoami`) | its result; binding one is allowed but rarely useful |
+
+That is why `$task.id` and not `$task`: the second would have to *mean* one of twenty-nine fields, and the one it meant would be
+a decision this file made on the reader's behalf.
 
 ## Identity: one login, never switched
 
@@ -87,14 +104,15 @@ design takes both spellings and compiles them to one `Step`:
 let ivan = person new ivan --name Ivan
            project new alpha "Alpha One" --start 2026-11-03 --end 2026-12-18
 let task = task new --project alpha --title "Header budgets"
-           task edit $task --assignee ivan --estimate 4 --start 2026-11-09 --end 2026-11-13
-           task promote $task
-           task remove $task --yes
+           task edit $task.id --assignee $ivan.id --estimate 4 --start 2026-11-09 --end 2026-11-13
+           task promote $task.id
+           task remove $task.id --yes
 ```
 
 - **`let <var> =`** at the start of a line binds the row the step creates; a bare line binds nothing.
-- **`$var`** interpolates that row's id, in an argument or a flag value. Interpolation happens **before** parsing, and an id
-  is `alpha-n7qk` — letters, digits and one dash — so it cannot change what the line means.
+- **`$var.field`** interpolates one field of that result, in an argument or a flag value. A bare `$var` is an error that names
+  the likely intent (`usage: $task is a result, not a value — write $task.id`), because "the row" and "its id" being the same
+  string is how a plan silently writes wrong values. Interpolation happens **before** parsing.
 - `#` starts a comment; blank lines are ignored.
 - **A line is only `verb + args + flags`.** Pipes, `&&`, `;`, redirections and environment variables are **refused by name**
   (`usage: a plan line cannot use "&&"; a plan is not a shell`) rather than half-supported, because a file that looks like a
