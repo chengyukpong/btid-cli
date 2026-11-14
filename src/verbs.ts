@@ -450,8 +450,18 @@ const projectLs: Verb = {
 const projectNew: Verb = {
   name: 'new project',
   summary: 'Create one row; the store mints the id.',
-  usage: 'btid new project --key <key> --name <text> [--start day] [--end day] [--description text] [--color #hex] [--json] [--dry-run]',
-  flags: { key: 'value', name: 'value', start: 'value', end: 'value', description: 'value', color: 'value', 'dry-run': 'boolean' },
+  usage:
+    'btid new project --key <key> --name <text> [--start day] [--end day] [--description text] [--color #hex] [--members ids] [--json] [--dry-run]',
+  flags: {
+    key: 'value',
+    name: 'value',
+    start: 'value',
+    end: 'value',
+    description: 'value',
+    color: 'value',
+    members: 'value',
+    'dry-run': 'boolean',
+  },
   writes: true,
   async run(context) {
     const key = stringFlag(context.flags, 'key')
@@ -462,6 +472,9 @@ const projectNew: Verb = {
 
     const description = stringFlag(context.flags, 'description')
     const color = stringFlag(context.flags, 'color')
+    // Members at birth, so a plan does not need a second commit before anybody can hold its work.
+    const membersText = stringFlag(context.flags, 'members')
+    const members = membersText === null || membersText === 'none' ? [] : listOf(membersText)
     const result = context.store.createProjects([
       {
         id: key,
@@ -470,6 +483,7 @@ const projectNew: Verb = {
         ...(stringFlag(context.flags, 'end') === null ? {} : { endDate: stringFlag(context.flags, 'end') as string }),
         ...(description === null ? {} : { description }),
         ...(color === null ? {} : { color }),
+        ...(members.length === 0 ? {} : { members }),
       },
     ] as Parameters<Store['createProjects']>[0])
     if (!result.ok) return refusal(result, context.out, context.json, { index: false })
@@ -489,7 +503,7 @@ const projectEdit: Verb = {
   name: 'edit project/<id>',
   summary: 'Change one row’s fields.',
   usage:
-    'btid edit project/<id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
+    'btid edit project/<id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|paused|done] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
   flags: {
     name: 'value',
     start: 'value',
@@ -545,8 +559,12 @@ function projectPatchFromFlags(context: VerbContext): { patch: Record<string, un
   if (labels !== null) patch['labels'] = labels === 'none' ? [] : listOf(labels)
   const statusText = stringFlag(context.flags, 'status')
   if (statusText !== null) {
-    if (statusText !== 'active' && statusText !== 'archived') {
-      return { message: `--status “${statusText}” is not one of active, archived` }
+      if (statusText === 'archived') {
+        // `archived` is not a project status: the model has active, paused and done, and archiving is a verb.
+        return { message: `a project is not archived by a status; archive it instead: btid archive project/<id> --yes` }
+      }
+      if (statusText !== 'active' && statusText !== 'paused' && statusText !== 'done') {
+        return { message: `--status “${statusText}” is not one of active, paused, done` }
     }
     patch['status'] = statusText
   }

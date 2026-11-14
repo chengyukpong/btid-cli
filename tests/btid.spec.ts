@@ -192,10 +192,47 @@ describe('btid', () => {
   it('refuses a window that ends before it starts, with the core’s sentence', async () => {
     const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta', '--start', '2026-11-30', '--end', '2026-11-02'])
     assert.equal(code, 1)
-    assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
-    assert.match(lines.text, /cannot end \(2026-11-02\) before it starts/)
-    assert.equal(client.messages.length, 0)
-  })
+      assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
+      assert.match(lines.text, /cannot end \(2026-11-02\) before it starts/)
+      assert.equal(client.messages.length, 0)
+    })
+
+    it('gives a new project its members, so nobody needs a second commit', async () => {
+      client.put('people.json', {
+        chengyukpong: managerRow,
+        ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
+        gary: { ...managerRow, id: 'gary', displayName: 'Gary', githubHandle: 'gary', role: 'member' },
+      })
+      const code = await btid(['new', 'project', '--key', 'gamma', '--name', 'Gamma', '--members', 'ivan,gary'])
+      assert.equal(code, 0, lines.text)
+      assert.deepEqual(client.json('projects/gamma/project.json')['gamma']!['members'], ['ivan', 'gary'])
+    })
+
+    it('refuses members who are not on the roster, with the core’s sentence', async () => {
+      client.put('people.json', { chengyukpong: managerRow })
+      const code = await btid(['new', 'project', '--key', 'gamma', '--name', 'Gamma', '--members', 'nobody'])
+      assert.equal(code, 1)
+      assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
+      assert.match(lines.text, /not on the roster: nobody/)
+    })
+
+    it('refuses a project status of archived, pointing at the verb that archives', async () => {
+      const code = await btid(['edit', 'project/alpha', '--status', 'archived'])
+      assert.equal(code, 2)
+      assert.match(lines.text, /archive it instead: btid archive project\/<id> --yes/)
+      assert.equal(client.messages.length, 0, 'a usage error writes nothing')
+    })
+
+    it('takes the three statuses a project actually has', async () => {
+      for (const status of ['active', 'paused', 'done']) {
+        const code = await btid(['edit', 'project/alpha', '--status', status])
+        assert.equal(code, 0, status + ': ' + lines.text)
+        assert.equal(client.json('projects/alpha/project.json')['alpha']!['status'], status)
+        lines.written.length = 0
+      }
+      assert.equal(client.messages.length, 3, 'one commit each')
+    })
+
 
   it('gives an existing project its window with project edit, in one commit', async () => {
     const code = await btid(['edit', 'project/alpha', '--start', '2026-11-02', '--end', '2026-11-30'])

@@ -32,6 +32,11 @@ by position.
 | `whoami` | who you are, and where you are pointing | — |
 | `version` · `help` | about the binary | — |
 
+**A project is born delegable.** `new project --members ivan,gary` fills the list in the same commit, so a plan need not
+create and then edit before anybody can hold its work — and `edit project/<id> --members none` empties it again.
+Archiving is not one of those values: a project has `active`, `paused` and `done`, and `--status archived` is refused
+with the verb that does archive it.
+
 **`archive` is the one verb that is not a field change.** It tags the store at the commit it starts from — `archive-<UTC>`,
 the state about to be deleted — then removes the project and its tasks. The tag is the copy, so **there is no
 unarchive**: getting a project back is `git checkout` on the tag, not a verb. It refuses when the store holds uncommitted
