@@ -20,6 +20,13 @@ export interface VerbContext {
   /** Where snapshots live — the default for this machine, or wherever a test pointed it. */
   cacheDir: string
   /**
+   * `--details`, once, for every read that has more to it than the row.
+   *
+   * A show prints the object's own fields; the counts, the effort and the rows beside it are opinions about several
+   * rows, so they wait to be asked for. One flag rather than one per verb, because the question is the same every time.
+   */
+  details: boolean
+  /**
    * The commit the verb made, set by its one `commit()` call.
    *
    * `null` when there was nothing to write (the engine says so), `undefined` when the verb did not write at all. The

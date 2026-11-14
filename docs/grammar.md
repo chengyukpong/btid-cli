@@ -16,7 +16,7 @@ by position.
 | verb | what it does | paths it takes |
 |---|---|---|
 | `ls` | list | `task` · `project` · `person` · `task/<id>/step` · `task/<id>/label` |
-| `show` | read one | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `cache` |
+| `show` | read one — its own fields; `--details` adds what is beside it | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `cache` |
 | `new` | create — the store mints the id | `task` · `project` · `person` · `store` · `task/<id>/step` |
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
 | `promote` | one step up the ladder: backlog → todo → in progress → done — takes no attributes | `task/<id>` |
@@ -29,6 +29,11 @@ by position.
 | `plan` | run a file of commands | *(a file, not a path)* |
 | `whoami` | who you are, and where you are pointing | — |
 | `version` · `help` | about the binary | — |
+
+**A read prints the row, and nothing it computed.** `show task/<id>` prints the fields the store holds, by the names it
+holds them under, and leaves out the ones that are empty — what a reader would find in `--json`. The counts, the effort,
+the checklist and the history are all about more than this one row, so they wait for `--details`. One flag for every read,
+because the question is always the same: *show me what is beside this row*.
 
 The verb set is closed. Adding one is a decision about the grammar, not about a resource — which is the whole point: a resource
 grows a *path*, not a verb. `plan`, `whoami`, `version` and `help` are the four that name no path, because none of them is

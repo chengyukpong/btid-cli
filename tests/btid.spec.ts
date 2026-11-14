@@ -123,12 +123,20 @@ describe('btid', () => {
     })
   })
 
-  it('prints one task with its steps and warnings', async () => {
-    const code = await btid(['show', 'task/alpha-a1b2'])
-    assert.equal(code, 0)
-    assert.match(lines.text, /alpha-a1b2 {2}Write the failing test/)
-    assert.match(lines.text, /status todo/)
-  })
+    it('prints one task, and its steps only when asked for', async () => {
+      const code = await btid(['show', 'task/alpha-a1b2'])
+      assert.equal(code, 0)
+      assert.match(lines.text, /alpha-a1b2 {2}Write the failing test/)
+      assert.match(lines.text, /status\s+todo/)
+      assert.doesNotMatch(lines.text, /steps/, 'the checklist is a detail')
+
+      lines.written.length = 0
+      assert.equal(await btid(['new', 'task/alpha-a1b2/step', '--name', 'Write it']), 0, lines.text)
+
+      lines.written.length = 0
+      assert.equal(await btid(['show', 'task/alpha-a1b2', '--details']), 0)
+      assert.match(lines.text, /steps/)
+    })
 
   it('says a task is gone instead of throwing', async () => {
     const code = await btid(['show', 'task/alpha-zzzz', '--json'])
@@ -470,15 +478,18 @@ describe('btid', () => {
   it('shows a project and a person, by id and by handle', async () => {
     assert.equal(await btid(['show', 'project/alpha']), 0, lines.text)
     assert.match(lines.text, /alpha {2}Alpha One/)
+      assert.doesNotMatch(lines.text, /1 task/, 'how many tasks is a detail')
+
+      lines.written.length = 0
+      assert.equal(await btid(['show', 'project/alpha', '--details']), 0, lines.text)
       assert.match(lines.text, /1 task/)
       assert.match(lines.text, /The project this test is about\./)
-  description: 'The project this test is about.',
       assert.match(lines.text, /md estimated/)
 
     lines.written.length = 0
     assert.equal(await btid(['show', 'person/chengyukpong']), 0, lines.text)
       assert.match(lines.text, /chengyukpong {2}Cheng/)
-      assert.match(lines.text, /manager · @chengyukpong/)
+      assert.match(lines.text, /manager/)
 
     lines.written.length = 0
     assert.equal(await btid(['show', 'person/chengyukpong', '--json']), 0)

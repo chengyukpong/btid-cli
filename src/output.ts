@@ -64,3 +64,24 @@ export function wrapText(text: string, width: number): string[] {
   if (line !== '') lines.push(line)
   return lines
 }
+/** One line of a row's own fields: a label, and how the row reads in it. `null` means the row has nothing to say there. */
+export interface Field<TRow> {
+  label: string
+  value: (row: TRow) => string | null
+}
+
+/**
+ * A row's own fields, aligned, with the empty ones left out.
+ *
+ * `show` prints what the object holds — what a reader would find in the JSON — and nothing it computed. That is why the
+ * details of a project (its counts, its effort, its tasks) live behind `--details`: a row is a fact, a summary is an
+ * opinion about several rows, and the two should not be the same page.
+ */
+export function rowFields<TRow>(row: TRow, fields: readonly Field<TRow>[]): string[] {
+  const present = fields
+    .map((field) => [field.label, field.value(row)] as const)
+    .filter((entry): entry is readonly [string, string] => entry[1] !== null && entry[1] !== '')
+  if (present.length === 0) return []
+  const width = Math.max(...present.map(([label]) => label.length))
+  return present.map(([label, value]) => `  ${label.padEnd(width)}  ${value}`)
+}

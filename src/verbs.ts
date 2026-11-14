@@ -1,10 +1,10 @@
 import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from 'btid-core'
-import type { BoardSort, CreateProjectInput, CreateTaskInput, Store, Task, TaskHandle } from 'btid-core'
+import type { BoardSort, CreateProjectInput, CreateTaskInput, Project, Store, Task, TaskHandle, User } from 'btid-core'
 import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
-import { dayOf, describeStore, table, wrapText } from './output'
+import { dayOf, describeStore, rowFields, table, wrapText } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
-import type { Column } from './output'
+import type { Column, Field } from './output'
 import { fieldsOf, printRows, refusal, usage, type Verb, type VerbContext } from './verb'
 
 /**
@@ -74,12 +74,60 @@ async function commit(context: VerbContext, message: string): Promise<number | n
 
 const taskColumns: readonly Column<Task>[] = [
   { title: 'ID', value: (row) => row.taskId },
-    { title: 'STATUS', value: (row) => STATUS_LABELS[row.status].toLowerCase() },
+  { title: 'STATUS', value: (row) => STATUS_LABELS[row.status].toLowerCase() },
   { title: 'PRIORITY', value: (row) => row.priority },
   { title: 'OWNER', value: (row) => row.assigneeId ?? '—' },
   { title: 'END', value: (row) => dayOf(row.endDate) },
   { title: 'DONE', value: (row) => `${row.percentComplete}%` },
   { title: 'TITLE', value: (row) => row.title },
+]
+
+// A row's own fields, under the names the store gives them: `show` prints what the object holds, and nothing it computed.
+// Empty is absence, so a null, a blank string and an empty list print nothing rather than a dash.
+
+const TASK_FIELDS: readonly Field<Task>[] = [
+  { label: 'projectId', value: (row) => row.projectId },
+  { label: 'status', value: (row) => row.status },
+  { label: 'priority', value: (row) => row.priority },
+  { label: 'assigneeId', value: (row) => row.assigneeId },
+  { label: 'startDate', value: (row) => row.startDate },
+  { label: 'endDate', value: (row) => row.endDate },
+  { label: 'estimateDays', value: (row) => (row.estimateDays === null ? null : `${row.estimateDays} md`) },
+  { label: 'percentComplete', value: (row) => `${row.percentComplete}%` },
+  { label: 'tracked', value: (row) => (row.tracked ? 'yes' : null) },
+  { label: 'isSmall', value: (row) => (row.isSmall ? 'yes' : null) },
+  { label: 'blocked', value: (row) => (row.blocked ? 'yes' : null) },
+  { label: 'blockedReason', value: (row) => row.blockedReason },
+  { label: 'blockedBy', value: (row) => (row.blockedBy.length === 0 ? null : row.blockedBy.join(', ')) },
+  { label: 'labels', value: (row) => (row.labels.length === 0 ? null : row.labels.join(', ')) },
+  { label: 'definitionOfDone', value: (row) => row.definitionOfDone },
+  { label: 'description', value: (row) => row.description },
+  { label: 'createdById', value: (row) => row.createdById },
+  { label: 'firstPromotedAt', value: (row) => (row.firstPromotedAt === null ? null : row.firstPromotedAt.slice(0, 16)) },
+  { label: 'createdAt', value: (row) => row.createdAt.slice(0, 16) },
+  { label: 'updatedAt', value: (row) => row.updatedAt.slice(0, 16) },
+  { label: 'updatedBy', value: (row) => row.updatedBy },
+  { label: 'rev', value: (row) => String(row.rev) },
+]
+
+const PROJECT_FIELDS: readonly Field<Project>[] = [
+  { label: 'description', value: (row) => row.description },
+  { label: 'status', value: (row) => row.status },
+  { label: 'ownerId', value: (row) => row.ownerId },
+  { label: 'members', value: (row) => (row.members.length === 0 ? null : row.members.join(', ')) },
+  { label: 'labels', value: (row) => (row.labels.length === 0 ? null : row.labels.join(', ')) },
+  { label: 'color', value: (row) => row.color },
+  { label: 'startDate', value: (row) => row.startDate },
+  { label: 'endDate', value: (row) => row.endDate },
+  { label: 'createdAt', value: (row) => row.createdAt.slice(0, 16) },
+  { label: 'updatedAt', value: (row) => row.updatedAt.slice(0, 16) },
+]
+
+const PERSON_FIELDS: readonly Field<User>[] = [
+  { label: 'githubHandle', value: (row) => `@${row.githubHandle}` },
+  { label: 'role', value: (row) => row.role },
+  { label: 'active', value: (row) => (row.active ? 'yes' : 'no') },
+  { label: 'avatarUrl', value: (row) => row.avatarUrl },
 ]
 
 /** The `--note` flag, if there is one: the one field an edit takes outside its patch. */
@@ -122,8 +170,9 @@ const taskLs: Verb = {
 
 const taskShow: Verb = {
   name: 'show task/<id>',
-  summary: 'Read one row.',
-  usage: 'btid show task/<id> [--json]',
+  summary: 'Read one row: its own fields, and its steps and history with --details.',
+  usage: 'btid show task/<id> [--details] [--json]',
+  flags: { details: 'boolean' },
   async run(context) {
     const id = context.args[0]
     if (id === undefined) return usage('btid show task/<id>', context.out, context.json)
@@ -145,16 +194,28 @@ const taskShow: Verb = {
     }
 
     context.out.line(`${row.taskId}  ${row.title}`)
-    context.out.line(
-      `  project ${row.projectId}   status ${row.status}   owner ${row.assigneeId ?? '—'}   ${row.percentComplete}%`,
-    )
-    context.out.line(`  window  ${dayOf(row.startDate)} → ${dayOf(row.endDate)}   estimate ${row.estimateDays ?? '—'}`)
+    for (const line of rowFields(row, TASK_FIELDS)) context.out.line(line)
+
+    // Steps are a list beside the row and the log is its history, so neither is a field: `--details` is where they go.
+    if (!context.details) return 0
+
     if (handle.steps.length > 0) {
       const progress = handle.progress
-      context.out.line(`  steps   ${progress.done}/${progress.total}`)
+      context.out.line('')
+      context.out.line(`  steps  ${progress.done}/${progress.total}`)
       for (const step of handle.steps) context.out.line(`    [${step.done ? 'x' : ' '}] ${step.id}  ${step.name}`)
     }
     for (const warning of handle.warnings) context.out.line(`  warning ${warning.message}`)
+
+    const entries = row.activities.slice(-5)
+    if (entries.length > 0) {
+      context.out.line('')
+      context.out.line(`  history  the last ${entries.length} of ${row.activities.length}`)
+      for (const entry of entries) {
+        const names = entry.changes.map((change) => change.field).join(', ')
+        context.out.line(`    ${entry.at.slice(0, 16)}  ${entry.editors.join(', ')}  ${names}`)
+      }
+    }
     return 0
   },
 }
@@ -689,8 +750,9 @@ const personRemove: Verb = {
 /** One project, by key. The read a plan uses to reuse a row it did not create. */
 const projectShow: Verb = {
   name: 'show project/<id>',
-  summary: 'Read one row.',
-  usage: 'btid show project/<id> [--json]',
+  summary: 'Read one row: its own fields, and its work with --details.',
+  usage: 'btid show project/<id> [--details] [--json]',
+  flags: { details: 'boolean' },
   async run(context) {
     const id = context.args[0]
     if (id === undefined) return usage('btid show project/<id>', context.out, context.json)
@@ -701,52 +763,40 @@ const projectShow: Verb = {
       return refusal({ ok: false, code: 'PROJECT_NOT_FOUND', reason: `Project ${id} is not in the store.` }, context.out, context.json)
     }
 
-      const tasks = handle.tasks()
-      context.result = row
-      if (context.json) {
-        context.out.json({ ...row, tasks: tasks.total })
-        return 0
-      }
-
-      // A page, not a row: what the project is, how its work is spread, and the work itself. The values line up because the
-      // labels do — `window`, `work`, `status`, `effort` are the same width.
-      const owners = new Set(tasks.rows.map((task) => task.assigneeId).filter((id): id is string => id !== null))
-      const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
-        .filter(([, value]) => value > 0)
-        .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
-        .join(" · ")
-      const effort = tasks.mandays()
-      const title = `${row.id}  ${row.name}`
-
-      context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.status} · owner ${row.ownerId}`)
-      // A description is whatever somebody typed: it goes under the title, folded, so one long sentence cannot push the
-      // labelled block off the screen.
-      const about = row.description.trim()
-      if (about !== "") {
-        context.out.line("")
-        for (const text of wrapText(about, 74)) context.out.line(`  ${text}`)
-        context.out.line("")
-      }
-      context.out.line(`  window  ${dayOf(row.startDate)} → ${dayOf(row.endDate)}`)
-      context.out.line(
-        `  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"}` +
-          (owners.size === 0 ? "" : ` · assigned to ${owners.size} ${owners.size === 1 ? "person" : "people"}`) +
-          (row.labels.length === 0 ? "" : ` · labels ${row.labels.join(", ")}`),
-      )
-      // Members and assignees are different facts: a project can hold work by people who were never added to it, and the
-      // page must not let one read as the other.
-        context.out.line(`  members ${row.members.length === 0 ? "—" : row.members.join(", ")}`)
-      if (counts !== "") context.out.line(`  status  ${counts}`)
-      context.out.line(
-        `  effort  ${effort.estimate} md estimated · ${effort.scheduled} md booked · ${effort.used} md used` +
-          (effort.remaining === 0 ? "" : ` · ${effort.remaining} md left`),
-      )
-
-      if (tasks.total > 0) {
-        context.out.line("")
-        context.out.line(table(tasks.order("endDate").rows as Task[], taskColumns))
-      }
+    const tasks = handle.tasks()
+    context.result = row
+    if (context.json) {
+      context.out.json({ ...row, tasks: tasks.total })
       return 0
+    }
+
+    context.out.line(`${row.id}  ${row.name}`)
+    for (const line of rowFields(row, PROJECT_FIELDS)) context.out.line(line)
+    if (!context.details) return 0
+
+    // Everything below is about several rows rather than about this one: how the work is spread, and the work itself.
+    const owners = new Set(tasks.rows.map((task) => task.assigneeId).filter((candidate): candidate is string => candidate !== null))
+    const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
+      .filter(([, value]) => value > 0)
+      .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
+      .join(' · ')
+    const effort = tasks.mandays()
+
+    context.out.line('')
+    context.out.line(
+      `  work    ${tasks.total} ${tasks.total === 1 ? 'task' : 'tasks'}` +
+        (owners.size === 0 ? '' : ` · assigned to ${owners.size} ${owners.size === 1 ? 'person' : 'people'}`),
+    )
+    if (counts !== '') context.out.line(`  status  ${counts}`)
+    context.out.line(
+      `  effort  ${effort.estimate} md estimated · ${effort.scheduled} md booked · ${effort.used} md used` +
+        (effort.remaining === 0 ? '' : ` · ${effort.remaining} md left`),
+    )
+
+    if (tasks.total > 0) {
+      context.out.line('')
+      context.out.line(table(tasks.order('endDate').rows as Task[], taskColumns))
+    }
     return 0
   },
 }
@@ -754,8 +804,9 @@ const projectShow: Verb = {
 /** One person, by roster id **or** GitHub handle — a plan author has one or the other. */
 const personShow: Verb = {
   name: 'show person/<id>',
-  summary: 'Read one row.',
-  usage: 'btid show person/<id> [--json]',
+  summary: 'Read one row: its own fields, and the work it holds with --details.',
+  usage: 'btid show person/<id> [--details] [--json]',
+  flags: { details: 'boolean' },
   async run(context) {
     const who = context.args[0]
     if (who === undefined) return usage('btid show person/<id>', context.out, context.json)
@@ -769,30 +820,34 @@ const personShow: Verb = {
     }
 
     const handle = context.store.person(row.id)
-      const tasks = handle.tasks()
-      if (context.json) {
-        context.out.json({ ...row, tasks: tasks.total })
-        return 0
-      }
-
-      // The same page shape as a project: who this is, what they are carrying, and the rows themselves.
-      const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
-        .filter(([, value]) => value > 0)
-        .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
-        .join(" · ")
-      const effort = tasks.mandays(true)
-      const title = `${row.id}  ${row.displayName}`
-
-      context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.role}${row.active ? "" : " · inactive"} · @${row.githubHandle}`)
-      context.out.line(`  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"} on the board`)
-      if (counts !== "") context.out.line(`  status  ${counts}`)
-      context.out.line(`  effort  ${effort.estimate} md estimated · ${effort.used} md used`)
-
-      if (tasks.total > 0) {
-        context.out.line("")
-        context.out.line(table(tasks.order("endDate").rows as Task[], taskColumns))
-      }
+    const tasks = handle.tasks()
+    context.result = row
+    if (context.json) {
+      context.out.json({ ...row, tasks: tasks.total })
       return 0
+    }
+
+    context.out.line(`${row.id}  ${row.displayName}`)
+    for (const line of rowFields(row, PERSON_FIELDS)) context.out.line(line)
+    if (!context.details) return 0
+
+    // What they are carrying, and the rows themselves — the same question a project's details answer.
+    const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
+      .filter(([, value]) => value > 0)
+      .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
+      .join(' · ')
+    const effort = tasks.mandays(true)
+
+    context.out.line('')
+    context.out.line(`  work    ${tasks.total} ${tasks.total === 1 ? 'task' : 'tasks'} on the board`)
+    if (counts !== '') context.out.line(`  status  ${counts}`)
+    context.out.line(`  effort  ${effort.estimate} md estimated · ${effort.used} md used`)
+
+    if (tasks.total > 0) {
+      context.out.line('')
+      context.out.line(table(tasks.order('endDate').rows as Task[], taskColumns))
+    }
+    return 0
   },
 }
 
