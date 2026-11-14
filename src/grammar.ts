@@ -31,7 +31,7 @@ export interface Rule {
   example?: string
 }
 
-const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskRemove } = HANDLERS
+const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskComment, taskRemove } = HANDLERS
 const { projectLs, projectShow, projectNew, projectEdit, projectArchive, projectRemove } = HANDLERS
 const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
@@ -87,6 +87,7 @@ export const RULES: readonly Rule[] = [
 
   { verb: 'promote', path: 'task/<id>', handler: taskPromote, args: place, example: 'btid promote task/alpha-n7qk' },
   { verb: 'demote', path: 'task/<id>', handler: taskDemote, args: place, example: 'btid demote task/alpha-n7qk' },
+  { verb: 'comment', path: 'task/<id>', handler: taskComment, args: place, example: 'btid comment task/alpha-n7qk waiting on the schema review' },
 
   { verb: 'remove', path: 'task/<id>', handler: taskRemove, args: place, example: 'btid remove task/alpha-n7qk --yes' },
   { verb: 'remove', path: 'project/<id>', handler: projectRemove, args: place },

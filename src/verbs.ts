@@ -692,6 +692,34 @@ const taskRemove: Verb = {
   },
 }
 
+const taskComment: Verb = {
+  name: 'comment task/<id>',
+  summary: 'Say something on a task. Any member may comment on anybody’s work.',
+  usage: 'btid comment task/<id> <text> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    // The text is the one free token, like a label's name: everything after the path, so it needs no quotes for one word and
+    // no flag for several.
+    const text = context.args.slice(1).join(' ').trim()
+    if (id === undefined || text === '') return usage('btid comment task/<id> <text>', context.out, context.json)
+
+    // Author and day come from the core: the CLI cannot sign a comment it was not given by the person typing it.
+    const result = context.store.task(id).comment(text)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `comment ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    const comment = result.value.comments[result.value.comments.length - 1]!
+    context.result = result.value
+    if (context.json) context.out.json(comment)
+    else context.out.line(`commented  ${result.value.taskId}   ${comment.id}   ${comment.authorId}   ${comment.body}`)
+    return 0
+  },
+}
+
 const projectArchive: Verb = {
   name: 'archive project/<id>',
   summary: 'Tag the store, then delete the project and its work. There is no unarchive.',
@@ -1387,6 +1415,7 @@ export const HANDLERS = {
   taskEdit,
   taskPromote,
   taskDemote,
+  taskComment,
   taskRemove,
   projectLs,
   projectShow,

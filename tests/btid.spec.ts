@@ -547,6 +547,25 @@ describe('btid', () => {
       assert.equal(client.tags.get(tag), before)
     })
 
+    it('comments on a task: the text is the free token, the author is the store', async () => {
+      lines.written.length = 0
+      const code = await btid(['comment', 'task/alpha-a1b2', 'waiting', 'on', 'the', 'review'])
+      assert.equal(code, 0, lines.text)
+      assert.match(lines.text, /commented {2}alpha-a1b2 {3}cm-/)
+      assert.equal(client.messages.at(-1), 'comment alpha-a1b2')
+
+      const row = client.json('projects/alpha/tasks.json')['alpha-a1b2'] as { comments: { body: string; authorId: string }[] }
+      assert.equal(row.comments.length, 1)
+      assert.equal(row.comments[0]!.body, 'waiting on the review', 'the words after the path are the comment')
+      assert.equal(row.comments[0]!.authorId, 'chengyukpong', 'the actor, never the caller')
+    })
+
+    it('refuses a comment with nothing in it', async () => {
+      const code = await btid(['comment', 'task/alpha-a1b2'])
+      assert.equal(code, 2)
+      assert.match(lines.text, /btid comment task\/<id> <text>/)
+    })
+
     it('refuses to archive without --yes, and says there is no unarchive', async () => {
       const code = await btid(['archive', 'project/alpha'])
       assert.equal(code, 2)
@@ -765,7 +784,7 @@ describe('btid', () => {
   it('a wrong verb at a known path answers with the verbs valid there', async () => {
     const code = await btid(['clear', 'task/alpha-a1b2'])
     assert.equal(code, 2)
-      assert.match(lines.text, /does not take .clear.\. It takes show, edit, promote, demote, remove\./)
+      assert.match(lines.text, /does not take .clear.\. It takes show, edit, promote, demote, comment, remove\./)
   })
 
   it('refuses attributes on promote, naming the verb that takes them', async () => {
@@ -787,7 +806,7 @@ describe('btid', () => {
     assert.equal(edit.writes, true)
     assert.ok(edit.flags.length > 0)
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
-      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'remove'])
+      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'remove'])
       assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
     assert.equal(manifest.paths.length, 11, 'the path tree is indexed once')
   })
