@@ -22,7 +22,7 @@ const managerRow = {
 const project = {
   id: 'alpha',
   name: 'Alpha One',
-    description: 'The project this test is about.',
+  description: 'The project this test is about.',
   status: 'active',
   ownerId: 'chengyukpong',
   members: [],
@@ -472,7 +472,7 @@ describe('btid', () => {
     assert.match(lines.text, /alpha {2}Alpha One/)
       assert.match(lines.text, /1 task/)
       assert.match(lines.text, /The project this test is about\./)
-    description: 'The project this test is about.',
+  description: 'The project this test is about.',
       assert.match(lines.text, /md estimated/)
 
     lines.written.length = 0
