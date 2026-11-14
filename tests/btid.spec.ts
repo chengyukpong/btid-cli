@@ -553,6 +553,7 @@ describe('btid', () => {
         'let ivan  = new person --handle ivan --name Ivan',
         'let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18',
         'let task  = new task --project $gamma.id --title "First task"',
+        '            edit project/$gamma.id --members $ivan.id',
         '            edit task/$task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
         '            promote task/$task.id',
       ].join('\n'),
@@ -571,7 +572,7 @@ describe('btid', () => {
     assert.equal(client.messages.length, 1, 'one commit: ' + client.messages.join(' / '))
     assert.match(client.messages[0]!, /add person ivan/)
     assert.match(client.messages[0]!, /promote /)
-    assert.match(lines.text, /5 steps, 5 ok, 0 refused/)
+      assert.match(lines.text, /6 steps, 6 ok, 0 refused/)
   })
 
   it('writes per step when --commit=each is asked for', async () => {
