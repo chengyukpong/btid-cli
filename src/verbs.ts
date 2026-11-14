@@ -721,10 +721,13 @@ const projectShow: Verb = {
       context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.status} · owner ${row.ownerId}`)
       context.out.line(`  window  ${dayOf(row.startDate)} → ${dayOf(row.endDate)}`)
       context.out.line(
-        `  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"} · ${owners.size} ${owners.size === 1 ? "person" : "people"}` +
-          (row.members.length === 0 ? "" : ` · members ${row.members.join(", ")}`) +
+        `  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"}` +
+          (owners.size === 0 ? "" : ` · assigned to ${owners.size} ${owners.size === 1 ? "person" : "people"}`) +
           (row.labels.length === 0 ? "" : ` · labels ${row.labels.join(", ")}`),
       )
+      // Members and assignees are different facts: a project can hold work by people who were never added to it, and the
+      // page must not let one read as the other.
+        context.out.line(`  members ${row.members.length === 0 ? "—" : row.members.join(", ")}`)
       if (counts !== "") context.out.line(`  status  ${counts}`)
       context.out.line(
         `  effort  ${effort.estimate} md estimated · ${effort.scheduled} md booked · ${effort.used} md used` +
