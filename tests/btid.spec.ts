@@ -641,6 +641,36 @@ describe('btid', () => {
       assert.equal(client.files.has('projects/alpha/project.json'), true, 'nothing was touched')
     })
 
+    it('moves a step by position, and refuses a position that is not a number', async () => {
+      client.put('projects/alpha/tasks.json', {
+        'alpha-a1b2': {
+          ...task(),
+          steps: [
+            { id: 'st-1111', name: 'One', detail: '', done: false, doneAt: null },
+            { id: 'st-2222', name: 'Two', detail: '', done: false, doneAt: null },
+            { id: 'st-3333', name: 'Three', detail: '', done: false, doneAt: null },
+          ],
+        },
+      })
+
+      assert.equal(await btid(['move', 'task/alpha-a1b2/step/st-3333', '--to', '1']), 0, lines.text)
+      assert.match(lines.text, /moved {2}alpha-a1b2/)
+      const steps = client.json('projects/alpha/tasks.json')['alpha-a1b2']!['steps'] as { id: string }[]
+      assert.deepEqual(steps.map((one) => one.id), ['st-3333', 'st-1111', 'st-2222'])
+
+      lines.written.length = 0
+      assert.equal(await btid(['move', 'task/alpha-a1b2/step/st-3333', '--to', 'abc']), 2)
+      assert.match(lines.text, /--to takes a whole number/)
+    })
+
+    it('shows comments with --details, because a comment is not a field', async () => {
+      await btid(['comment', 'task/alpha-a1b2', 'A note for the record'])
+      lines.written.length = 0
+      assert.equal(await btid(['show', 'task/alpha-a1b2', '--details']), 0)
+      assert.match(lines.text, /comments {2}1/)
+      assert.match(lines.text, /A note for the record/)
+    })
+
     it('refuses an archive inside a plan, naming the commit it would tag', async () => {
       const path = await planFile('archive.btid', ['archive project/alpha --yes'].join('\n'))
       const code = await btid(['plan', path])
@@ -672,6 +702,13 @@ describe('btid', () => {
     await writeFile(path, body, 'utf8')
     return path
   }
+
+    it('keeps a boolean flag boolean inside a plan, so --yes means yes', async () => {
+      const path = await planFile('yes.btid', ['remove task/alpha-a1b2 --yes'].join('\n'))
+      const code = await btid(['plan', path])
+      assert.equal(code, 0, lines.text)
+      assert.equal(client.files.has('projects/alpha/tasks.json'), false, 'the row was removed')
+    })
 
   it('runs a plan of commands, threading ids from one step into the next', async () => {
     const path = await planFile(

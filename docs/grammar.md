@@ -11,7 +11,7 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — eighteen, no two-word ones
+## Verbs — nineteen, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
@@ -26,6 +26,7 @@ by position.
 | `remove` | delete a row, or detach a label | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `task/<id>/label` |
 | `add` | attach what already exists (a label from the project's vocabulary) | `task/<id>/label` |
 | `rename` | rename a step | `task/<id>/step/<step-id>` |
+| `move` | move a step to a position — `--to <n>`, and past the end means last | `task/<id>/step/<step-id>` |
 | `done` · `undo` | tick / untick a step | `task/<id>/step/<step-id>` |
 | `clear` | drop every snapshot | `cache` |
 | `plan` | run a file of commands | *(a file, not a path)* |

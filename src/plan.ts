@@ -490,6 +490,12 @@ function interpolate(
   }
   const flags: Record<string, string | boolean> = {}
   for (const [flag, value] of Object.entries(step.flags)) {
+      // A boolean flag stays a boolean: `true` stringified to "true" is not `=== true`, and every switch in the
+      // handlers reads it that way. (Found by a seed plan whose `remove --yes` kept asking for `--yes`.)
+      if (typeof value === 'boolean') {
+        flags[flag] = value
+        continue
+      }
     const resolved = one(value)
     if (typeof resolved !== 'string') return resolved
     flags[flag] = resolved

@@ -207,6 +207,14 @@ const taskShow: Verb = {
     }
     for (const warning of handle.warnings) context.out.line(`  warning ${warning.message}`)
 
+    if (row.comments.length > 0) {
+      context.out.line('')
+      context.out.line(`  comments  ${row.comments.length}`)
+      for (const comment of row.comments) {
+        context.out.line(`    ${comment.createdAt.slice(0, 16)}  ${comment.authorId}  ${comment.body}`)
+      }
+    }
+
     const entries = row.activities.slice(-5)
     if (entries.length > 0) {
       context.out.line('')
@@ -1280,6 +1288,44 @@ const stepNew: Verb = {
   },
 }
 
+const stepMove: Verb = {
+  name: 'move task/<id>/step/<step-id>',
+  summary: 'Move a step to a position. A position past the end means last.',
+  usage: 'btid move task/<id>/step/<step-id> --to <n> [--json] [--dry-run]',
+  flags: { to: 'value', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const step = context.args[1]
+    const toText = stringFlag(context.flags, 'to')
+    if (id === undefined || step === undefined || toText === null) {
+      return usage('btid move task/<id>/step/<step-id> --to <n>', context.out, context.json)
+    }
+    // A destination is a number, so a typo is refused here rather than clamped into "last" by the core.
+    const to = Number(toText)
+    if (!Number.isFinite(to) || toText.trim() === '') {
+      return usage(`--to takes a whole number, not “${toText}”`, context.out, context.json)
+    }
+
+    const before = context.store.task(id).row
+    const result = context.store.task(id).moveStep(step, to)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `move ${id} ${step} to ${to}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${step}   already there`)
+    else {
+      const order = result.value.steps.map((one) => one.id).join(', ')
+      context.out.line(`moved  ${result.value.taskId}   ${step}   ${to}   ${order}`)
+    }
+    return 0
+  },
+}
+
 const stepRename: Verb = {
   name: 'rename task/<id>/step/<step-id>',
   summary: 'Rename one step.',
@@ -1511,6 +1557,7 @@ export const HANDLERS = {
   stepShow,
   stepNew,
   stepRename,
+  stepMove,
   stepDone,
   stepUndo,
   stepRemove,

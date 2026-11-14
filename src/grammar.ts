@@ -35,7 +35,7 @@ const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskCommen
 const { projectLs, projectShow, projectNew, projectEdit, projectArchive, projectMemberAdd, projectMemberRemove, projectRemove } = HANDLERS
 const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
-const { stepLs, stepShow, stepNew, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
+const { stepLs, stepShow, stepNew, stepMove, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
 const { cacheShow, cacheClear } = HANDLERS
 const { storeInit, storeWhoami } = HANDLERS
 const { plan, version } = HANDLERS
@@ -101,6 +101,7 @@ export const RULES: readonly Rule[] = [
   { verb: 'add', path: 'project/<id>/member', handler: projectMemberAdd, args: place, example: 'btid add project/alpha-n7qk/member ivan' },
 
   { verb: 'rename', path: 'task/<id>/step/<step-id>', handler: stepRename, args: place, example: 'btid rename task/alpha-n7qk/step/st-a1b2 --name "Measure the header at 1440"' },
+  { verb: 'move', path: 'task/<id>/step/<step-id>', handler: stepMove, args: place, example: 'btid move task/alpha-n7qk/step/st-a1b2 --to 1' },
 
   { verb: 'done', path: 'task/<id>/step/<step-id>', handler: stepDone, args: place, example: 'btid done task/alpha-n7qk/step/st-a1b2' },
   { verb: 'undo', path: 'task/<id>/step/<step-id>', handler: stepUndo, args: place, example: 'btid undo task/alpha-n7qk/step/st-a1b2' },
