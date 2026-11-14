@@ -22,7 +22,7 @@ const managerRow = {
 const project = {
   id: 'alpha',
   name: 'Alpha One',
-  description: '',
+    description: 'The project this test is about.',
   status: 'active',
   ownerId: 'chengyukpong',
   members: [],
@@ -40,7 +40,6 @@ const task = (over: Record<string, unknown> = {}) => ({
   projectId: 'alpha',
   firstPromotedAt: '2026-11-01T09:00:00+08:00',
   title: 'Write the failing test',
-  description: '',
   definitionOfDone: 'Both columns line up.',
   status: 'todo',
   priority: 'medium',
@@ -472,6 +471,8 @@ describe('btid', () => {
     assert.equal(await btid(['show', 'project/alpha']), 0, lines.text)
     assert.match(lines.text, /alpha {2}Alpha One/)
       assert.match(lines.text, /1 task/)
+      assert.match(lines.text, /The project this test is about\./)
+    description: 'The project this test is about.',
       assert.match(lines.text, /md estimated/)
 
     lines.written.length = 0

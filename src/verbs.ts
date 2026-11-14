@@ -2,7 +2,7 @@ import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from 'btid-core'
 import type { BoardSort, CreateProjectInput, CreateTaskInput, Store, Task, TaskHandle } from 'btid-core'
 import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
-import { dayOf, describeStore, table } from './output'
+import { dayOf, describeStore, table, wrapText } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
 import type { Column } from './output'
 import { fieldsOf, printRows, refusal, usage, type Verb, type VerbContext } from './verb'
@@ -719,6 +719,14 @@ const projectShow: Verb = {
       const title = `${row.id}  ${row.name}`
 
       context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.status} · owner ${row.ownerId}`)
+      // A description is whatever somebody typed: it goes under the title, folded, so one long sentence cannot push the
+      // labelled block off the screen.
+      const about = row.description.trim()
+      if (about !== "") {
+        context.out.line("")
+        for (const text of wrapText(about, 74)) context.out.line(`  ${text}`)
+        context.out.line("")
+      }
       context.out.line(`  window  ${dayOf(row.startDate)} → ${dayOf(row.endDate)}`)
       context.out.line(
         `  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"}` +

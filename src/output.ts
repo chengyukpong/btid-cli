@@ -43,3 +43,24 @@ export const percentOf = (value: number): string => `${value}%`
 /** `owner/repo@ref`, so a session can say which store it is pointed at. */
 export const describeStore = (store: { owner: string; repo: string; ref: string }): string =>
   `${store.owner}/${store.repo}@${store.ref}`
+
+/**
+ * Free text, folded to a width.
+ *
+ * A page prints what the store holds, and a description is whatever somebody typed — so the renderer, not the author, is
+ * what keeps the layout in one piece. Words are never broken; a word longer than the width gets a line of its own.
+ */
+export function wrapText(text: string, width: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/).filter((part) => part !== '')) {
+    if (line === '') line = word
+    else if (line.length + 1 + word.length <= width) line += ` ${word}`
+    else {
+      lines.push(line)
+      line = word
+    }
+  }
+  if (line !== '') lines.push(line)
+  return lines
+}
