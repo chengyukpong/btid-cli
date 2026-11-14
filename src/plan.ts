@@ -1,24 +1,25 @@
 import { readFileSync } from 'node:fs'
+import { isPathless, isVerb, resolve, type Rule } from './grammar'
 import type { Output } from './output'
-import { findVerb, isPlanStep } from './verbs'
-import type { Verb, VerbContext } from './verb'
+import type { VerbContext } from './verb'
 
 /**
  * A plan: one file, one process, one store, a list of commands run in order.
  *
- * The file is either **commands** (one per line, parsed by the same flag parser the terminal uses) or **JSON** (the same
- * steps with unambiguous values). Both compile to the same `Step`, so the runner does not know which it was given — and a
- * line file cannot drift from the CLI's grammar, because it *is* that grammar.
+ * A step is the grammar's own `verb + path + data`, so the line form and the terminal cannot drift: the file is either
+ * **commands** (one per line, parsed by the same flag parser) or **JSON** (the same steps with unambiguous values). Both
+ * compile to the same `Step`, and the runner resolves each step through the one table in `grammar.ts`.
  *
  * What a step may be is decided here, not by the runner: a mutation, a `show`, or `whoami`. A plan cannot list (`ls` is a
- * report), cannot change identity (there is no verb for it, and the check refuses one by name if one ever appears), and
- * cannot compute — a reference reads one field off the result of an earlier step, and that is all.
+ * report) and cannot change identity (there is no verb for it, and the check refuses one by name if one ever appears).
  */
 
 export interface Step {
-  /** The name the step's result is bound to: `let task = task new …`. */
+  /** The name the step's result is bound to: `let task = new task --project alpha …`. */
   name?: string
   verb: string
+  /** The path token, possibly containing a reference: `task/$task.id`. `''` for a pathless verb. */
+  path: string
   args: string[]
   flags: Record<string, string | boolean>
   /** The line it came from, so a refusal can point at the file rather than at a step number. */
@@ -34,6 +35,9 @@ const MAX_LINES = 500
 
 /** A reference: `$task.id`, or the JSON form `{"$ref": "task.id"}`. */
 const REF = /^\$([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/
+
+/** A reference anywhere in a string: a path is text with a reference inside it, not a reference by itself. */
+const REF_IN_TEXT = /\$([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?/g
 
 /** Split a command line the way the terminal would: quotes group, everything else is whitespace. */
 export function tokenize(line: string): string[] | { message: string } {
@@ -76,8 +80,8 @@ export function tokenize(line: string): string[] | { message: string } {
 /**
  * A plan as commands.
  *
- * `let <name> = <verb> …` binds the step's result; `#` starts a comment. Shell syntax is refused **by name** rather than
- * half-supported: a file that looks like a shell script and is not one is worse than either.
+ * `let <name> = <verb> <path> …` binds the step's result; `#` starts a comment. Shell syntax is refused **by name**
+ * rather than half-supported: a file that looks like a shell script and is not one is worse than either.
  */
 function parseLines(text: string): Plan | { message: string } {
   const steps: Step[] = []
@@ -110,20 +114,36 @@ function parseLines(text: string): Plan | { message: string } {
     if (!Array.isArray(tokens)) return tokens
     if (tokens.length === 0) continue
 
-    const verb = findVerb(tokens[0]!)
-    if (verb === undefined) {
-      const two = tokens[1] === undefined ? '' : ` ${tokens[1]}`
-      const twoWord = findVerb(`${tokens[0]}${two}`)
-      if (twoWord === undefined) return { message: `no verb called “${tokens[0]}”` }
-      const flags = flagsOf(twoWord, tokens.slice(2))
-      if ('message' in flags) return flags
-      steps.push({ ...(name === undefined ? {} : { name }), verb: twoWord.name, args: flags.args, flags: flags.flags, at: index + 1 })
-      continue
+    const verb = tokens[0]!
+    if (!isVerb(verb)) {
+      // An old spelling in a plan gets the same teaching the terminal gives one.
+      const teaching = resolve(tokens)
+      return {
+        message:
+          teaching.kind === 'refusal'
+            ? teaching.message
+            : `no verb called “${verb}”. A plan line is btid <verb> <path> [data].`,
+      }
     }
 
-    const flags = flagsOf(verb, tokens.slice(1))
+    const pathless = isPathless(verb)
+    const path = pathless ? '' : tokens[1]
+    if (!pathless && path === undefined) return { message: `${verb} needs a path. Run btid help.` }
+
+    const routed = pathless ? resolve([verb]) : resolve([verb, path!])
+    if (routed.kind === 'refusal') return { message: routed.message }
+    if (routed.kind !== 'rule') return { message: 'that plan has no steps' }
+
+    const flags = flagsOf(routed.rule, pathless ? tokens.slice(1) : tokens.slice(2))
     if ('message' in flags) return flags
-    steps.push({ ...(name === undefined ? {} : { name }), verb: verb.name, args: flags.args, flags: flags.flags, at: index + 1 })
+    steps.push({
+      ...(name === undefined ? {} : { name }),
+      verb: routed.rule.verb,
+      path: path ?? '',
+      args: flags.args,
+      flags: flags.flags,
+      at: index + 1,
+    })
   }
 
   return { steps }
@@ -131,12 +151,13 @@ function parseLines(text: string): Plan | { message: string } {
 
 /** The verb's own flags, read the way the terminal reads them: a flag it does not take is a usage error naming its flags. */
 function flagsOf(
-  verb: Verb,
+  rule: Rule,
   tokens: readonly string[],
 ): { args: string[]; flags: Record<string, string | boolean> } | { message: string } {
   const args: string[] = []
   const flags: Record<string, string | boolean> = {}
-  const known = verb.flags ?? {}
+  const known = rule.handler.flags ?? {}
+  const form = rule.path === null ? rule.verb : `${rule.verb} ${rule.path}`
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!
@@ -151,8 +172,8 @@ function flagsOf(
       return {
         message:
           takes.length === 0
-            ? `${verb.name} takes no flags, and “--${rawName}” is not one`
-            : `${verb.name} does not take --${rawName}. It takes ${takes.join(', ')}.`,
+            ? `${form} takes no flags, and “--${rawName}” is not one`
+            : `${form} does not take --${rawName}. It takes ${takes.join(', ')}.`,
       }
     }
     if (kind === 'boolean') {
@@ -168,7 +189,7 @@ function flagsOf(
   return { args, flags }
 }
 
-/** The JSON form: `{"steps": […]}` or a bare array, with each step the same four keys. */
+/** The JSON form: `{"steps": […]}` or a bare array, with each step `verb + path + args + flags`. */
 function parseJson(text: string): Plan | { message: string } {
   let document: unknown
   try {
@@ -189,8 +210,20 @@ function parseJson(text: string): Plan | { message: string } {
     if (raw === null || typeof raw !== 'object' || typeof raw['verb'] !== 'string') {
       return { message: `step ${index + 1} has no "verb"` }
     }
-    const verb = findVerb(raw['verb'] as string)
-    if (verb === undefined) return { message: `no verb called “${raw['verb']}”` }
+    const verb = raw['verb'] as string
+    if (!isVerb(verb)) return { message: `step ${index + 1}: no verb called “${verb}”` }
+
+    const pathless = isPathless(verb)
+    let path = ''
+    if (!pathless) {
+      const candidate = raw['path']
+      if (candidate === undefined) return { message: `step ${index + 1} has no "path"` }
+      path = typeof candidate === 'string' ? candidate : String(valueOf(candidate))
+    }
+
+    const routed = pathless ? resolve([verb]) : resolve([verb, path])
+    if (routed.kind === 'refusal') return { message: `step ${index + 1}: ${routed.message}` }
+    if (routed.kind !== 'rule') return { message: `step ${index + 1}: that step names nothing` }
 
     const args = raw['args']
     if (args !== undefined && !Array.isArray(args)) return { message: `step ${index + 1}: "args" must be a list` }
@@ -198,16 +231,20 @@ function parseJson(text: string): Plan | { message: string } {
     if (flags !== undefined && (typeof flags !== 'object' || flags === null || Array.isArray(flags))) {
       return { message: `step ${index + 1}: "flags" must be an object` }
     }
-    const unknown = Object.keys((flags ?? {}) as Record<string, unknown>).find((flag) => (verb.flags ?? {})[flag] === undefined)
+    const unknown = Object.keys((flags ?? {}) as Record<string, unknown>).find(
+      (flag) => (routed.rule.handler.flags ?? {})[flag] === undefined,
+    )
     if (unknown !== undefined) {
-      const takes = Object.keys(verb.flags ?? {}).map((flag) => `--${flag}`)
-      return { message: `step ${index + 1}: ${verb.name} does not take --${unknown}. It takes ${takes.join(', ')}.` }
+      const takes = Object.keys(routed.rule.handler.flags ?? {}).map((flag) => `--${flag}`)
+      const form = routed.rule.path === null ? routed.rule.verb : `${routed.rule.verb} ${routed.rule.path}`
+      return { message: `step ${index + 1}: ${form} does not take --${unknown}. It takes ${takes.join(', ')}.` }
     }
 
     const name = raw['name'] ?? raw['let']
     parsed.push({
       ...(typeof name === 'string' ? { name } : {}),
-      verb: verb.name,
+      verb: routed.rule.verb,
+      path,
       args: (args ?? []).map((arg) => {
         const value = valueOf(arg)
         return typeof value === 'string' ? value : String(value)
@@ -248,12 +285,17 @@ export function readPlan(path: string, stdin = ''): Plan | { message: string } {
 export function check(plan: Plan): Plan | { message: string } {
   const bound = new Set<string>()
   for (const step of plan.steps) {
-    if (!isPlanStep(step.verb)) {
+    const routed = step.path === '' ? resolve([step.verb]) : resolve([step.verb, step.path])
+    if (routed.kind === 'refusal') return { message: `step ${step.at}: ${routed.message}` }
+    if (routed.kind !== 'rule') return { message: `step ${step.at}: that step names nothing` }
+    const { rule } = routed
+    const reads = rule.verb === 'show' || rule.verb === 'whoami'
+    if (rule.handler.writes !== true && !reads) {
       return {
         message:
-          step.verb.includes('impersonate') || step.verb.includes('signout')
-            ? `a plan runs as one login; “${step.verb}” would change who that is`
-            : `a plan runs commands; “${step.verb}” is a report`,
+          rule.verb.includes('impersonate') || rule.verb.includes('signout')
+            ? `a plan runs as one login; “${rule.verb}” would change who that is`
+            : `a plan runs commands; “${rule.verb}” is a report`,
       }
     }
     for (const [index, arg] of step.args.entries()) {
@@ -266,6 +308,9 @@ export function check(plan: Plan): Plan | { message: string } {
       const problem = checkRef(value, bound)
       if (problem !== null) return { message: `step ${step.at}: ${problem}` }
     }
+    // A reference inside a path is text, not a whole value: `task/$task.id` is interpolated before routing.
+    const pathProblem = step.path === '' ? null : checkRefsIn(step.path, bound)
+    if (pathProblem !== null) return { message: `step ${step.at}: ${pathProblem}` }
     // A name is only usable from the step after the one that binds it.
     if (step.name !== undefined) {
       if (bound.has(step.name)) return { message: `step ${step.at}: “${step.name}” is already bound` }
@@ -285,11 +330,22 @@ function checkRef(value: string, bound: ReadonlySet<string>): string | null {
   return null
 }
 
+/** Every reference inside a path segment: `task/$task.id` is fine, `task/$task` is not a value. */
+function checkRefsIn(text: string, bound: ReadonlySet<string>): string | null {
+  for (const match of text.matchAll(REF_IN_TEXT)) {
+    const variable = match[1]!
+    const field = match[2]
+    if (!bound.has(variable)) return `$: “${variable}” is not bound by an earlier step`
+    if (field === undefined) return `$: “${match[0]}” is a result, not a value — write ${match[0]}.id`
+  }
+  return null
+}
+
 export interface PlanRun {
   /** The verb's own exit code, or `0`. */
   code: number
   /** Lines the plan printed, for the caller's summary. */
-  steps: { at: number; verb: string; ok: boolean; code: number }[]
+  steps: { at: number; verb: string; path: string; ok: boolean; code: number }[]
 }
 
 /**
@@ -310,21 +366,31 @@ export async function runPlan(
   let code = 0
 
   for (const step of plan.steps) {
-    const verb = findVerb(step.verb)!
-    const resolved = resolve(step, bindings)
+    const resolved = interpolate(step, bindings)
     if ('message' in resolved) {
       context.out.line(`usage: step ${step.at}: ${resolved.message}`)
       return { code: 2, steps: results }
     }
 
-    const isRead = verb.writes !== true
+    // Route the interpolated path through the one resolver; its ids are what the handler reads in front of the data.
+    const routed = resolved.path === '' ? resolve([step.verb]) : resolve([step.verb, resolved.path])
+    if (routed.kind !== 'rule') {
+      const message = routed.kind === 'refusal' ? routed.message : 'that step names nothing'
+      context.out.line(`usage: step ${step.at}: ${message}`)
+      return { code: 2, steps: results }
+    }
+    const { rule } = routed
+    const isRead = rule.handler.writes !== true
+
     const buffer: string[] = []
     const sink: Output = isRead
       ? context.out
       : ({ line: (text: string) => buffer.push(text), json: (value: unknown) => buffer.push(JSON.stringify(value)) } as unknown as Output)
     const child: VerbContext = {
       ...context,
-      args: resolved.args,
+      args: rule.args(routed.ids, resolved.args),
+      path: routed.path,
+      form: rule.path === null ? rule.verb : `${rule.verb} ${routed.path}`,
       flags: resolved.flags,
       out: sink,
       json: context.json && isRead,
@@ -333,7 +399,7 @@ export async function runPlan(
 
     let stepCode = 0
     try {
-      stepCode = await verb.run(child)
+      stepCode = await rule.handler.run(child)
     } catch (error) {
       context.out.line(`fault: step ${step.at}: ${(error as Error).message}`)
       return { code: 2, steps: results }
@@ -342,16 +408,17 @@ export async function runPlan(
     const ok = stepCode === 0
     const position = results.length + 1
     if (!ok) for (const text of buffer) context.out.line(text)
+    const display = step.path === '' ? step.verb : `${step.verb} ${step.path}`
     if (!context.json && !context.flags['quiet']) {
-      context.out.line(`${ok ? 'ok  ' : 'no  '}${String(position).padStart(2)}  ${step.verb}${ok ? '' : `   (${stepCode === 2 ? 'usage' : 'refused'})`}`)
+      context.out.line(`${ok ? 'ok  ' : 'no  '}${String(position).padStart(2)}  ${display}${ok ? '' : `   (${stepCode === 2 ? 'usage' : 'refused'})`}`)
     }
-    results.push({ at: step.at, verb: step.verb, ok, code: stepCode })
+    results.push({ at: step.at, verb: step.verb, path: step.path, ok, code: stepCode })
     if (ok && step.name !== undefined) bindings.set(step.name, child.result)
     if (!ok) {
       code = stepCode === 0 ? 1 : stepCode
       if (!options.keepGoing) break
     }
-    if (isRead && !context.json && isReadOutput(step.verb)) {
+    if (isRead && !context.json && isReadOutput(rule)) {
       // The verb printed the row; keep the transcript readable by saying which step printed it.
       context.out.line(`  (step ${position})`)
     }
@@ -369,13 +436,13 @@ export async function runPlan(
   return { code, steps: results }
 }
 
-const isReadOutput = (verb: string): boolean => verb.endsWith(' show') || verb.endsWith('whoami')
+const isReadOutput = (rule: Rule): boolean => rule.verb === 'show' || rule.verb === 'whoami'
 
-/** Resolve `$var.field` against the step's bindings. */
-function resolve(
+/** Interpolate `$var.field` in the path, the data and the flags — before the step is routed. */
+function interpolate(
   step: Step,
   bindings: ReadonlyMap<string, unknown>,
-): { args: string[]; flags: Record<string, string | boolean> } | { message: string } {
+): { path: string; args: string[]; flags: Record<string, string | boolean> } | { message: string } {
   const one = (value: unknown): string | { message: string } => {
     if (typeof value !== 'string') return String(value)
     const match = REF.exec(value)
@@ -392,6 +459,23 @@ function resolve(
     return String((result as Record<string, unknown>)[field])
   }
 
+  // A path is text with a reference inside it: `task/$task.id` → `task/alpha-n7qk`. Whole-string `$task` in a path is
+  // caught by `checkRefsIn`; here a MISSING binding is still worth a sentence rather than a path that quietly routes wrong.
+  let path = step.path
+  for (const match of step.path.matchAll(REF_IN_TEXT)) {
+    const variable = match[1]!
+    const field = match[2]
+    if (field === undefined) return { message: `“${match[0]}” is a result, not a value — write ${match[0]}.id` }
+    if (!bindings.has(variable)) return { message: `“${variable}” is not bound by an earlier step` }
+    const result = bindings.get(variable)
+    if (result === null || typeof result !== 'object') return { message: `“${variable}” has no fields to read` }
+    const fields = Object.keys(result as Record<string, unknown>)
+    if (!fields.includes(field)) {
+      return { message: `“${variable}” has no field “${field}”. It has: ${fields.join(', ')}` }
+    }
+    path = path.replace(match[0], String((result as Record<string, unknown>)[field]))
+  }
+
   const args: string[] = []
   for (const arg of step.args) {
     const value = one(arg)
@@ -404,5 +488,5 @@ function resolve(
     if (typeof resolved !== 'string') return resolved
     flags[flag] = resolved
   }
-  return { args, flags }
+  return { path, args, flags }
 }

@@ -39,8 +39,12 @@ export interface VerbContext {
    * all when the last step succeeds.
    */
   defer?: string[]
-  /** Whatever followed the verb, positionally. */
+  /** Whatever followed the path, positionally, with the path's ids placed first by the rule. */
   args: readonly string[]
+  /** The path token as typed (`task/alpha-n7qk`), or `''` for a verb that names no path. */
+  path: string
+  /** `verb + path` as typed, e.g. `edit task/alpha-n7qk` — for a usage sentence that names what was typed. */
+  form: string
   /** `--flag value`, `--flag=value`, and bare `--flag` as `true`. */
   flags: Readonly<Record<string, string | boolean>>
   out: Output
@@ -49,7 +53,7 @@ export interface VerbContext {
 }
 
 export interface Verb {
-  /** `task ls`, `store init` — what a person types. */
+  /** `edit task/<id>`, `ls task` — the grammar form this handler implements. */
   name: string
   /** One line, for `btid help`. */
   summary: string
@@ -59,6 +63,8 @@ export interface Verb {
   flags?: Readonly<Record<string, 'value' | 'boolean'>>
   /** Reads run without a token when the store can be opened anonymously; writes always need one. */
   writes?: boolean
+  /** Answers about the binary or the cache, so it opens no store at all. */
+  noStore?: boolean
   run(context: VerbContext): Promise<number>
 }
 

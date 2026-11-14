@@ -4,10 +4,11 @@ import { initStore, openStore, exitCodeOf, StoreFaultError, isStoreFault } from 
 import { resolveToken, whoAmI } from './auth'
 import { cachedLogin, configPath, readConfigFile, rememberLogin, resolveStore, type StoreLocation } from './config'
 import { cacheRoot, dropSnapshot, readSnapshot, snapshotPath, writeSnapshot } from './snapshot'
-import { ALL_VERBS } from './help'
+import { resolve } from './grammar'
+import { helpText } from './help'
 import { consoleOutput, describeStore, type Output } from './output'
-import { findVerb } from './verbs'
-import type { Verb, VerbContext } from './verb'
+import type { VerbContext } from './verb'
+import { usage } from './verb'
 
 /**
  * The entry point: parse, open, dispatch, turn the answer into an exit code.
@@ -65,16 +66,6 @@ export function parseFlags(argv: readonly string[]): Parsed {
     }
   }
   return { flags, args }
-}
-
-/** The verb a person typed: two words for most, one for `help`. */
-function findVerbFor(args: readonly string[]): { verb: Verb | undefined; rest: string[] } {
-  for (const length of [2, 1]) {
-    const name = args.slice(0, length).join(' ')
-    const verb = ALL_VERBS.find((candidate) => candidate.name === name)
-    if (verb !== undefined) return { verb, rest: args.slice(length) }
-  }
-  return { verb: undefined, rest: [...args] }
 }
 
 /**
@@ -159,41 +150,55 @@ export async function run(options: RunOptions): Promise<number> {
     parsed.args.length === 0 && (flags['version'] === true || flags['v'] === true) ? ['version'] : parsed.args
   const json = flags['json'] === true
 
-  const { verb, rest } = findVerbFor(args)
-  if (verb === undefined) {
-    out.line(args.length === 0 ? helpOrNothing(out) : `btid: unknown command “${args.join(' ')}”. Run btid help.`)
-    return args.length === 0 ? 0 : 2
+  // One tree: the verb, then one path token, then data. The resolver either matches a rule or teaches the new spelling.
+  const resolution = resolve(args)
+  if (resolution.kind === 'empty') {
+    out.line(helpText())
+    return 0
   }
+  if (resolution.kind === 'refusal') return usage(resolution.message, out, json)
+
+  const { rule, path, ids, data } = resolution
+  const handler = rule.handler
+  const form = rule.path === null ? rule.verb : `${rule.verb} ${path}`
 
   // A flag the verb does not declare is a mistake, not something to ignore: silently dropping it is how a typo becomes
   // "needs at least one field to change", which is the wrong sentence for the wrong problem.
   const global = new Set(['store', 'json', 'help', 'v', 'version', 'fresh'])
-  const declared = new Set([...Object.keys(verb.flags ?? {}), ...global])
+  const declared = new Set([...Object.keys(handler.flags ?? {}), ...global])
   const unknownFlags = Object.keys(flags).filter((flag) => !declared.has(flag))
   if (unknownFlags.length > 0) {
-    const known = Object.keys(verb.flags ?? {}).filter((flag) => !global.has(flag))
+    // `promote` is the crossing and nothing else; a status is a different verb's business, and the sentence says which.
+    if (rule.verb === 'promote') {
+      const flag = unknownFlags[0]!
+      const value = flags[flag]
+      return usage(`promote takes no attributes; edit ${path} --${flag}${value === true ? '' : ` ${String(value)}`}`, out, json)
+    }
+    const known = Object.keys(handler.flags ?? {}).filter((flag) => !global.has(flag))
     const names = unknownFlags.map((flag) => `--${flag}`).join(', ')
     out.line(
-      `usage: ${verb.name} does not take ${names}. It takes ${known.length === 0 ? 'no flags' : known.map((flag) => `--${flag}`).join(', ')}.`,
+      `usage: ${path === '' ? rule.verb : `${rule.verb} ${path}`} does not take ${names}. It takes ${known.length === 0 ? 'no flags' : known.map((flag) => `--${flag}`).join(', ')}.`,
     )
     return 2
   }
 
   // `--help` on any verb is its usage line, and nothing else happens.
   if (flags['help'] === true) {
-    out.line(verb.usage)
+    out.line(handler.usage)
     return 0
   }
 
   // These answer questions about the binary or the cache, so none of them requires a store.
-  if (STORE_LESS.has(verb.name)) {
+  if (handler.noStore === true) {
     try {
-      return await verb.run({
+      return await handler.run({
         store: undefined as never,
         location: { owner: '', repo: '', ref: '' },
         source: 'flag',
         cacheDir: options.cacheDir ?? cacheRoot(),
-        args: rest,
+        args: rule.args(ids, data),
+        path,
+        form,
         flags,
         out,
         json,
@@ -218,7 +223,7 @@ export async function run(options: RunOptions): Promise<number> {
   try {
     const token = options.tokenFor === undefined ? resolveToken(undefined, env).token : options.tokenFor()
     const login = await loginFor(token, config, options)
-    opened = await connect(resolved.store, token, login, verb.name === 'store init', {
+    opened = await connect(resolved.store, token, login, rule.verb === 'new' && rule.path === 'store', {
       ...(options.clientFor === undefined ? {} : { clientFor: options.clientFor }),
       ...(options.cacheDir === undefined ? {} : { cacheDir: options.cacheDir }),
       fresh: options.fresh === true || flags['fresh'] === true,
@@ -238,12 +243,14 @@ export async function run(options: RunOptions): Promise<number> {
       location: resolved.store,
       source: resolved.from,
       cacheDir: options.cacheDir ?? cacheRoot(),
-      args: rest,
+      args: rule.args(ids, data),
+      path,
+      form,
       flags,
       out,
       json,
     }
-    const code = await verb.run(context)
+    const code = await handler.run(context)
     if (code !== 0) return code
 
     // Keep the snapshot true, whichever way this command went.
@@ -252,7 +259,7 @@ export async function run(options: RunOptions): Promise<number> {
     // state — and the verb hands back the commit sha. That is a snapshot refresh with **no request at all**, which is what
     // keeps a loop of writes from paying for a cold load on every one of them.
     if (options.fresh !== true && flags['fresh'] !== true) {
-      if (verb.writes !== true) {
+      if (handler.writes !== true) {
         const head = await opened.client.head().catch(() => null)
         if (head !== null) writeSnapshot(opened.snapshotPath, { ...store.snapshot(), commit: head })
       } else if (typeof context.committed === 'string') {
@@ -285,9 +292,6 @@ export async function run(options: RunOptions): Promise<number> {
   }
 }
 
-/** The verbs that must work with no store and no token at all. */
-const STORE_LESS = new Set(['help', 'version', 'cache show', 'cache clear'])
-
 /** A fault is not a refusal: its code maps to an exit number, and `--json` carries it as data. */
 function fault(error: unknown, out: Output, json: boolean): number {
   if (isStoreFault(error)) {
@@ -306,15 +310,4 @@ function fault(error: unknown, out: Output, json: boolean): number {
   else out.line(`error: ${message}`)
   // Mirrors the engine's numbering for anything it classifies; otherwise the generic failure code.
   return typeof error === 'object' && error !== null ? exitCodeFor(error) : 1
-}
-
-const helpOrNothing = (out: Output): string => {
-  const width = Math.max(...ALL_VERBS.map((verb) => verb.name.length))
-  return [
-    'btid — the BTID terminal',
-    '',
-    ...ALL_VERBS.map((verb) => `  ${verb.name.padEnd(width, ' ')}  ${verb.summary}`),
-    '',
-    'Run btid help, or btid help <verb>.',
-  ].join('\n')
 }

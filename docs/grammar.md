@@ -61,8 +61,7 @@ the collection.
 
 ## Data is named
 
-Everything after the path is `--flag value`. There are no bare positionals, so nothing depends on the order of arguments that
-are not the path:
+Everything after the path is `--flag value`, with **two exceptions**, both deliberate:
 
 ```console
 $ btid new project --key alpha --name "Alpha One" --start 2026-10-26 --end 2026-11-23
@@ -71,8 +70,13 @@ $ btid new task --project alpha --title "Check the header budgets"
 $ btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."
 ```
 
-`ls` is the exception the terminal already had: its terms are the core's query grammar, and they are positional by design
-(`status=todo`, not `--status=todo`), because the core parses them.
+- **`ls` takes the core's query grammar positionally** (`status=todo`, not `--status=todo`), because the core parses that
+  text and a flag would be a second spelling of it.
+- **A label name is bare data** (`add task/<id>/label ui`), because a label *is* its text: flag-naming it would suggest a
+  field called `label`, and the value is the whole point.
+
+Neither exception depends on *order* — each is the single trailing datum a verb takes — so the property that matters is kept:
+nothing after a path is positional in the sense that moving it changes the meaning.
 
 ## Labels are data, never a segment
 

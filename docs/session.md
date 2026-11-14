@@ -1,5 +1,10 @@
 # A session, before any of it exists
 
+> **Superseded.** This page is the design conversation that produced the CLI, kept for the record. The grammar it
+> proposes — `btid <type> <verb>`, `--file` for creation — is **not** what shipped: the settled grammar is
+> [`grammar.md`](grammar.md) (`btid <verb> <path>`), and [`lifecycle-of-a-task.md`](lifecycle-of-a-task.md) is the
+> walkthrough in it. Where this page disagrees with those two, they are right.
+
 What `btid` should feel like, written as the transcript it has to produce. It is a specification: every line below is
 either output or a refusal the core already owns the words for, and each verb is `parse → one command → print`.
 

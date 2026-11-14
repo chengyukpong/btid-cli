@@ -1,21 +1,58 @@
 import { ProjectSchema, TaskSchema, UserSchema } from 'btid-core'
+import {
+  PATHS,
+  VERB_NAMES,
+  exampleOf,
+  isVerb,
+  pathsOf,
+  rulesFor,
+  summaryOf,
+  verbsAt,
+} from './grammar'
 import { CLI_VERSION, MANIFEST_VERSION } from './version'
 import { usage, type Verb, type VerbContext } from './verb'
-import { VERBS } from './verbs'
 
-/** Every flag name the registry knows, so `help` can be generated rather than kept in step by hand. */
-const flagNames = (verb: Verb): string[] => Object.keys(verb.flags ?? {})
+/** The flags a verb takes, unioned over its paths, so `help <verb>` can list them once. */
+const flagsOfVerb = (verb: string): { name: string; value: boolean }[] => {
+  const kinds = new Map<string, 'value' | 'boolean'>()
+  for (const rule of rulesFor(verb)) {
+    for (const [name, kind] of Object.entries(rule.handler.flags ?? {})) {
+      if (!kinds.has(name)) kinds.set(name, kind)
+    }
+  }
+  return [...kinds].map(([name, kind]) => ({ name, value: kind === 'value' }))
+}
 
-export const helpText = (from: readonly Verb[] = VERBS): string => {
-  const width = Math.max(...from.map((verb) => verb.name.length))
+/**
+ * The help page: one long page, not a lookup.
+ *
+ * It prints the whole table — every verb with the paths it takes, and every path with the verbs valid on it — because
+ * reading it should cost one command, not a question per combination. There is deliberately no `btid help <path>`: a path
+ * is data, and the command you run when you are lost must not require typing the thing you are lost about. The refusals
+ * carry a path's verbs instead.
+ */
+export const helpText = (): string => {
+  const verbWidth = Math.max(...VERB_NAMES.map((verb) => verb.length))
+  const pathWidth = Math.max(...PATHS.map((path) => path.length))
   return [
     'btid — the BTID terminal',
     '',
-    'usage: btid <type> <verb> [args] [flags]',
+    'usage: btid <verb> <path> [data] [--flags]',
     '',
-    ...from.map((verb) => `  ${verb.name.padEnd(width, ' ')}  ${verb.summary}`),
+    'VERBS × PATHS',
+    ...VERB_NAMES.map((verb) => {
+      const paths = pathsOf(verb)
+      return `  ${verb.padEnd(verbWidth, ' ')}  ${paths.length === 0 ? '—' : paths.join(' · ')}`
+    }),
     '',
-    'Every command reads `--json` and `--dry-run`. Exit codes: 0 ok, 1 refused, 2 usage.',
+    'PATHS × VERBS',
+    ...PATHS.map((path) => `  ${path.padEnd(pathWidth, ' ')}  ${verbsAt(path).join(', ')}`),
+    '',
+    'VERBS',
+    ...VERB_NAMES.map((verb) => `  ${verb.padEnd(verbWidth, ' ')}  ${summaryOf(verb)}`),
+    '',
+    'Exit codes: 0 ok, 1 refused, 2 usage. Every command takes --json.',
+    'Run btid help <verb> for its flags and one example.',
   ].join('\n')
 }
 
@@ -59,66 +96,79 @@ export const TYPES = [
 ] as const
 
 /**
- * The manifest.
+ * The manifest, version 2: grammar-shaped.
  *
- * `version` is this CLI's; `manifest` is the shape's. They are separate numbers on purpose: a change to the CLI that adds
- * a verb moves the first, a change to the manifest that moves a field's meaning moves the second, and a consumer can pin
+ * `version` is this CLI's; `manifest` is the shape's. They are separate numbers on purpose: a change to the CLI that adds a
+ * verb moves the first, a change to the manifest that moves a field's meaning moves the second, and a consumer can pin
  * either without being told the other one moved.
+ *
+ * An agent needs to know which combinations are legal, not just which words exist: `verbs[]` says what each verb applies
+ * to, and the `paths[]` index answers the other direction — which verbs are valid at a path.
  */
-export const manifest = (from: readonly Verb[] = VERBS): unknown => ({
+export const manifest = (): unknown => ({
   name: 'btid',
   version: CLI_VERSION,
   manifest: MANIFEST_VERSION,
-  verbs: from.map((verb) => ({
-    name: verb.name,
-    summary: verb.summary,
-    usage: verb.usage,
-    writes: verb.writes === true,
-    flags: flagNames(verb).map((flag) => ({ name: flag, value: (verb.flags ?? {})[flag] === 'value' })),
+  verbs: VERB_NAMES.map((verb) => ({
+    verb,
+    summary: summaryOf(verb),
+    paths: pathsOf(verb),
+    flags: flagsOfVerb(verb),
+    writes: rulesFor(verb).some((rule) => rule.handler.writes === true),
   })),
+  paths: PATHS.map((path) => ({ path, verbs: verbsAt(path) })),
   types: TYPES,
   exitCodes: { ok: 0, refused: 1, usage: 2 },
 })
 
-const help: Verb = {
+/** `btid help <verb>`: its paths, every usage line, its flags, and one example. */
+const verbPage = (context: VerbContext, verb: string): number => {
+  context.out.line(`${verb} — ${summaryOf(verb)}`)
+  const paths = pathsOf(verb)
+  context.out.line(`  paths: ${paths.length === 0 ? '(no path)' : paths.join(' · ')}`)
+  for (const rule of rulesFor(verb)) {
+    context.out.line(`  usage: ${rule.handler.usage}`)
+  }
+  const flags = flagsOfVerb(verb)
+  if (flags.length > 0) context.out.line(`  flags: ${flags.map((flag) => `--${flag.name}`).join(', ')}`)
+  const example = exampleOf(verb)
+  if (example !== undefined) context.out.line(`  example: ${example}`)
+  return 0
+}
+
+export const help: Verb = {
   name: 'help',
-  summary: 'List the verbs, or explain one. --json emits the manifest.',
-  usage: 'btid help [verb…] [--json]',
+  summary: 'Print the grammar, or explain one verb.',
+  usage: 'btid help [verb] [--json]',
   flags: { json: 'boolean' },
+  noStore: true,
   async run(context: VerbContext) {
     if (context.json) {
       context.out.json(manifest())
       return 0
     }
-    const wanted = context.args.join(' ')
-    if (wanted !== '') {
-      const type = TYPES.find((candidate) => candidate.type === wanted)
-      if (type !== undefined) {
-        context.out.line(`${type.type} fields (${type.fields.length}), as the store validates them:`)
-        const width = Math.max(...type.fields.map((field) => field.name.length))
-        for (const field of type.fields) {
-          const values = field.values === undefined ? '' : `  one of: ${field.values.join(', ')}`
-          context.out.line(
-            `  ${field.name.padEnd(width, ' ')}  ${field.type.padEnd(9, ' ')}  ${field.required ? 'required' : 'optional'}${values}`,
-          )
-        }
-        return 0
-      }
-      const verb = VERBS.find((candidate) => candidate.name === wanted)
-      if (verb === undefined) return usage(`no verb called “${wanted}”. Run btid help.`, context.out, false)
-      context.out.line(verb.usage)
-      context.out.line(`  ${verb.summary}`)
-      const flags = flagNames(verb)
-      if (flags.length > 0) context.out.line(`  flags: ${flags.map((flag) => `--${flag}`).join(', ')}`)
-      context.out.line('  fields: btid help task | project | person, or btid help --json')
+    if (context.args.length === 0) {
+      context.out.line(helpText())
       return 0
     }
-    context.out.line(helpText())
-    return 0
+
+    const wanted = context.args.join(' ')
+    if (isVerb(wanted)) return verbPage(context, wanted)
+
+    // The path roots, read off the tree at call time (help is loaded while the table is still being built).
+    const pathWords = new Set(PATHS.map((path) => path.split('/')[0]!))
+
+    // An old two-word verb in the data slot: name the new `help` form rather than treating it as a topic.
+    if (context.args.length === 2 && pathWords.has(context.args[0]!) && isVerb(context.args[1]!)) {
+      return usage(`the grammar is btid help ${context.args[1]}`, context.out, context.json)
+    }
+    // A path is data, not a help topic. There is deliberately no `btid help <path>`.
+    if (pathWords.has(wanted) || wanted.includes('/')) {
+      return usage(`“${wanted}” is a path, not a verb. btid help takes a verb: btid help edit.`, context.out, context.json)
+    }
+    return usage(`no verb called “${wanted}”. Run btid help.`, context.out, context.json)
   },
 }
-
-export const ALL_VERBS: readonly Verb[] = [...VERBS, help]
 
 /** Re-exported so a test can render rows the same way the verbs do. */
 export { printRows } from './verb'

@@ -3,7 +3,7 @@
 - **Status:** in-progress
 - **Created:** 2026-11-12T18:02:00+08:00
 - **Started:** 2026-11-12T18:02:00+08:00
-- **Finished:** —
+- **Finished:** 2026-11-14T23:35:00+08:00
 - **Approved:** —
 
 ## Description
@@ -20,22 +20,22 @@ This task is the rebuild: resolver, the verb × path table, the tests migrated b
 
 ## Steps
 
-- [ ] `src/grammar.ts`: the verb × path table. Each rule is `{ verb, path, command, args(ids, rest), summary }`, where `command`
+- [x] `src/grammar.ts`: the verb × path table. Each rule is `{ verb, path, command, args(ids, rest), summary }`, where `command`
       is the verb object that implements it today (`task edit`) and `args` places the path's ids where that object reads them.
-- [ ] `resolve(words, findVerb)`: verb, then path, then data. Ids come from the **shape's placeholders** (`<id>`, `<step>`), never
+- [x] `resolve(words, findVerb)`: verb, then path, then data. Ids come from the **shape's placeholders** (`<id>`, `<step>`), never
       from guessing which segment looks like a noun. Refusals name the alternative: `"task" is a path, not a verb`,
       `task/<id> does not take "ls". It takes show, edit, promote, remove.`
-- [ ] `cli.ts`: dispatch through the resolver; `--help` renders `btid <verb> <path>` plus that command's flags.
-- [ ] Usage strings in `verbs.ts` rewritten to the path form; `project new` takes `--key/--name`, `person new` takes `--handle`.
-- [ ] `help` and the manifest at version 2: verbs with the paths each applies to, plus `grammar` and `paths`. `help <verb>` lists
+- [x] `cli.ts`: dispatch through the resolver; `--help` renders `btid <verb> <path>` plus that command's flags.
+- [x] Usage strings in `verbs.ts` rewritten to the path form; `project new` takes `--key/--name`, `person new` takes `--handle`.
+- [x] `help` and the manifest at version 2: verbs with the paths each applies to, plus `grammar` and `paths`. `help <verb>` lists
       that verb's paths. **`commandFor(verb)` must tolerate `help`/`plan`/`version`**, whose commands are not in `VERBS` — that
       lookup was the crash in the abandoned attempt.
-- [ ] `plan.ts`: a step is `verb + path + data`. Line form `edit task/$task.id --estimate 4`; JSON form
+- [x] `plan.ts`: a step is `verb + path + data`. Line form `edit task/$task.id --estimate 4`; JSON form
       `{ verb, path, args, flags }`. References **inside** a path are interpolated (`$task.id` → the id) before routing; a bare
       `$task` is still refused as "a result, not a value".
-- [ ] Tests migrated to the new spelling: 64 assertions, same store behaviour, no old-form calls left.
-- [ ] `docs/operating.md` rewritten to the grammar; the "two grammars" note removed from the runbook.
-- [ ] 0.12.0, artifact packed.
+- [x] Tests migrated to the new spelling: 64 assertions, same store behaviour, no old-form calls left.
+- [x] `docs/operating.md` rewritten to the grammar; the "two grammars" note removed from the runbook.
+- [x] 0.12.0, artifact packed.
 
 ## How to verify
 
@@ -73,3 +73,31 @@ a row.
 
 Also fixed in the same sitting: the doc contradicted itself on labels — the `remove` row listed `task/<id>/label/<name>` while the
 path tree said a label name is never a segment. There is no such path; the collection stops at `task/<id>/label`.
+## Built (2026-11-14T23:35:00+08:00)
+
+The rebuild landed: `src/grammar.ts` (the table, `matchPath`, `resolve`, `oldSpelling`, `wrongVerb`), `verbs.ts` migrated rather
+than rewritten (ids from the path, bodies otherwise intact), `cli.ts` dispatching through `resolve`, `help.ts` on one page with
+manifest v2, `plan.ts` steps as `verb + path + data`, and the suite migrated.
+
+**Verified from outside the change**, not from the report: `tsc --noEmit` clean, `npm run build` clean, `npx vitest run` **70
+passing** (64 migrated + 6 new), and 15/15 checks driving the built binary — old spellings refused with the new form named,
+help one page with no path form, manifest `2` with `verbs[].paths[]` and `paths[]`, `whoami` a verb, `show store` naming it,
+`promote … --status` refused, version `0.12.0`.
+
+**Decisions the spec did not settle, and what was chosen:**
+
+- **`operating.md` was not in the new grammar**, despite the brief saying it was — that was my error in the brief, not the
+  builder's: `lifecycle-of-a-task.md` was migrated, `operating.md` was not. Fixed here by migrating all 41 commands, plus the
+  `promote --status` example, which the new grammar forbids.
+- **`docs/grammar.md` contradicted itself** on data: "no bare positionals" versus `add task/<id>/label ui`. The label name (and
+  the `ls` query) are the two named exceptions; the page now says so.
+- **`help <type>` is gone** — `btid help task` refuses as a path, because "no `help <path>`" and a type page cannot both exist.
+  The schema field lists remain in the manifest's `types`.
+- **Three new read paths had no legacy body** (`ls task/<id>/step`, `ls task/<id>/label`, `show task/<id>/step/<step-id>`); their
+  missing-row refusals (`TASK_NOT_FOUND`, `STEP_NOT_FOUND`) are the one place a sentence is generated in the CLI rather than the
+  core, because the core has no step read command. Recorded as a candidate for the core, not as a precedent.
+- **`session.md` is superseded** — it was the first draft of this grammar and now carries a banner saying so, rather than being
+  deleted or left to mislead.
+
+**Known smell, left alone:** `grammar.ts` imports `help` while `help.ts` imports `grammar` — a cycle that works only because
+help reads the table at call time. It is fine today and worth breaking when the table grows.

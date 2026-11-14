@@ -89,9 +89,9 @@ const noteOf = (context: VerbContext): { note?: string } => {
 }
 
 const taskLs: Verb = {
-  name: 'task ls',
-  summary: 'List tasks, optionally filtered by a query.',
-  usage: 'btid task ls [query…] [order] [--fields a,b] [--json]',
+  name: 'ls task',
+  summary: 'List rows: tasks, projects, people, or a task’s steps and labels.',
+  usage: 'btid ls task [query…] [order] [--fields a,b] [--json]',
   flags: { fields: 'value', order: 'value' },
   async run(context) {
     const words = [...context.args]
@@ -121,12 +121,12 @@ const taskLs: Verb = {
 }
 
 const taskShow: Verb = {
-  name: 'task show',
-  summary: 'Print one task, with its steps and the last change.',
-  usage: 'btid task show <id> [--json]',
+  name: 'show task/<id>',
+  summary: 'Read one row.',
+  usage: 'btid show task/<id> [--json]',
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid task show <id>', context.out, context.json)
+    if (id === undefined) return usage('btid show task/<id>', context.out, context.json)
 
     const handle = context.store.task(id)
     const row = handle.row
@@ -160,16 +160,16 @@ const taskShow: Verb = {
 }
 
 const taskNew: Verb = {
-  name: 'task new',
-  summary: 'Capture one task in a project.',
-  usage: 'btid task new --project <id> --title <text> [--priority low|medium|high|urgent] [--json] [--dry-run]',
+  name: 'new task',
+  summary: 'Create a row — or the store itself; the store mints the id.',
+  usage: 'btid new task --project <id> --title <text> [--priority low|medium|high|urgent] [--json] [--dry-run]',
   flags: { project: 'value', title: 'value', priority: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const projectId = stringFlag(context.flags, 'project')
     const title = stringFlag(context.flags, 'title')
     if (projectId === null || title === null) {
-      return usage('btid task new --project <id> --title <text>', context.out, context.json)
+      return usage('btid new task --project <id> --title <text>', context.out, context.json)
     }
     const priorityText = stringFlag(context.flags, 'priority')
     const priority = priorityText === null ? null : priorityOf(priorityText)
@@ -194,22 +194,17 @@ const taskNew: Verb = {
 }
 
 const taskPromote: Verb = {
-  name: 'task promote',
-  summary: 'Move a captured item onto the board. Needs a title, an owner, both dates, an estimate and a definition of done.',
-  usage: 'btid task promote <id> [--status todo|in_progress|done] [--json] [--dry-run]',
-  flags: { status: 'value', 'dry-run': 'boolean' },
+  name: 'promote task/<id>',
+  summary: 'Move a captured task onto the board. Takes no attributes.',
+  usage: 'btid promote task/<id> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid task promote <id>', context.out, context.json)
+    if (id === undefined) return usage('btid promote task/<id>', context.out, context.json)
 
-    const statusText = stringFlag(context.flags, 'status')
-    if (statusText !== null && statusText !== 'todo' && statusText !== 'in_progress' && statusText !== 'done') {
-      return usage(`--status “${statusText}” is not one of todo, in_progress, done`, context.out, context.json)
-    }
-
-    const result =
-      statusText === null ? context.store.task(id).promote() : context.store.task(id).promote(statusText)
+    // The crossing and nothing else: there is no status to choose. Moving a row *within* the board is `edit --status`.
+    const result = context.store.task(id).promote()
     if (!result.ok) return refusal(result, context.out, context.json)
 
     const committed = await commit(context, `promote ${id}`)
@@ -223,10 +218,10 @@ const taskPromote: Verb = {
 }
 
 const taskEdit: Verb = {
-  name: 'task edit',
-  summary: 'Change one task. A tracked end day needs --note.',
+  name: 'edit task/<id>',
+  summary: 'Change one row’s fields.',
   usage:
-    'btid task edit <id> [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
+    'btid edit task/<id> [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
   flags: {
     title: 'value',
     description: 'value',
@@ -250,13 +245,13 @@ const taskEdit: Verb = {
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid task edit <id>', context.out, context.json)
+    if (id === undefined) return usage('btid edit task/<id>', context.out, context.json)
 
     const built = taskPatchFromFlags(context)
     if ('message' in built) return usage(built.message, context.out, context.json)
     if (Object.keys(built.patch).length === 0) {
       return usage(
-        `btid task edit needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {})
+        `btid ${context.form} needs at least one field to change. It takes ${Object.keys(taskEdit.flags ?? {})
           .filter((flag) => flag !== 'dry-run' && flag !== 'note')
           .map((flag) => `--${flag}`)
           .join(', ')}.`,
@@ -357,9 +352,9 @@ function taskPatchFromFlags(context: VerbContext): { patch: Record<string, unkno
 // --- project ------------------------------------------------------------------------
 
 const projectLs: Verb = {
-  name: 'project ls',
-  summary: 'List projects.',
-  usage: 'btid project ls [--fields a,b] [--json]',
+  name: 'ls project',
+  summary: 'List rows: tasks, projects, people, or a task’s steps and labels.',
+  usage: 'btid ls project [--fields a,b] [--json]',
   flags: { fields: 'value' },
   async run(context) {
     const rows = context.store.all('project')
@@ -375,16 +370,16 @@ const projectLs: Verb = {
 }
 
 const projectNew: Verb = {
-  name: 'project new',
-  summary: 'Create one project. Give it a window or it cannot take work.',
-  usage: 'btid project new <key> <name> [--start day] [--end day] [--description text] [--color #hex] [--json] [--dry-run]',
-  flags: { start: 'value', end: 'value', description: 'value', color: 'value', 'dry-run': 'boolean' },
+  name: 'new project',
+  summary: 'Create one row; the store mints the id.',
+  usage: 'btid new project --key <key> --name <text> [--start day] [--end day] [--description text] [--color #hex] [--json] [--dry-run]',
+  flags: { key: 'value', name: 'value', start: 'value', end: 'value', description: 'value', color: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const key = context.args[0]
-    const name = context.args.slice(1).join(' ').trim()
-    if (key === undefined || name === '') {
-      return usage('btid project new <key> <name> --start <day> --end <day>', context.out, context.json)
+    const key = stringFlag(context.flags, 'key')
+    const name = stringFlag(context.flags, 'name')
+    if (key === null || name === null) {
+      return usage('btid new project --key <key> --name <text> --start <day> --end <day>', context.out, context.json)
     }
 
     const description = stringFlag(context.flags, 'description')
@@ -413,10 +408,10 @@ const projectNew: Verb = {
 }
 
 const projectEdit: Verb = {
-  name: 'project edit',
-  summary: 'Change one project. The manager’s act.',
+  name: 'edit project/<id>',
+  summary: 'Change one row’s fields.',
   usage:
-    'btid project edit <id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
+    'btid edit project/<id> [--name text] [--start day|none] [--end day|none] [--description text] [--status active|archived] [--color #hex] [--members ids|none] [--labels a,b|none] [--json] [--dry-run]',
   flags: {
     name: 'value',
     start: 'value',
@@ -431,12 +426,12 @@ const projectEdit: Verb = {
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid project edit <id>', context.out, context.json)
+    if (id === undefined) return usage('btid edit project/<id>', context.out, context.json)
 
     const built = projectPatchFromFlags(context)
     if ('message' in built) return usage(built.message, context.out, context.json)
     if (Object.keys(built.patch).length === 0) {
-      return usage('btid project edit needs at least one field to change', context.out, context.json)
+      return usage(`btid ${context.form} needs at least one field to change`, context.out, context.json)
     }
 
     const result = context.store.updateProjects([{ id, patch: built.patch }] as Parameters<Store['updateProjects']>[0])
@@ -484,9 +479,9 @@ function projectPatchFromFlags(context: VerbContext): { patch: Record<string, un
 // --- person -------------------------------------------------------------------------
 
 const personLs: Verb = {
-  name: 'person ls',
-  summary: 'List the roster.',
-  usage: 'btid person ls [--fields a,b] [--json]',
+  name: 'ls person',
+  summary: 'List rows: tasks, projects, people, or a task’s steps and labels.',
+  usage: 'btid ls person [--fields a,b] [--json]',
   flags: { fields: 'value' },
   async run(context) {
     const rows = context.store.all('person')
@@ -502,14 +497,14 @@ const personLs: Verb = {
 }
 
 const personNew: Verb = {
-  name: 'person new',
-  summary: 'Add one person to the roster.',
-  usage: 'btid person new <login> [--name text] [--role member|manager] [--json] [--dry-run]',
-  flags: { name: 'value', role: 'value', 'dry-run': 'boolean' },
+  name: 'new person',
+  summary: 'Create one row; the store mints the id.',
+  usage: 'btid new person --handle <login> [--name text] [--role member|manager] [--json] [--dry-run]',
+  flags: { handle: 'value', name: 'value', role: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const login = context.args[0]
-    if (login === undefined) return usage('btid person new <login> [--name text] [--role member|manager]', context.out, context.json)
+    const login = stringFlag(context.flags, 'handle')
+    if (login === null) return usage('btid new person --handle <login> [--name text] [--role member|manager]', context.out, context.json)
 
     const role = stringFlag(context.flags, 'role')
     if (role !== null && role !== 'member' && role !== 'manager') {
@@ -538,20 +533,20 @@ const personNew: Verb = {
 }
 
 const personEdit: Verb = {
-  name: 'person edit',
-  summary: 'Change one person. The manager’s act.',
+  name: 'edit person/<id>',
+  summary: 'Change one row’s fields.',
   usage:
-    'btid person edit <id> [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
+    'btid edit person/<id> [--name text] [--handle login] [--role member|manager] [--active on|off] [--json] [--dry-run]',
   flags: { name: 'value', handle: 'value', role: 'value', active: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid person edit <id>', context.out, context.json)
+    if (id === undefined) return usage('btid edit person/<id>', context.out, context.json)
 
     const built = personPatchFromFlags(context)
     if ('message' in built) return usage(built.message, context.out, context.json)
     if (Object.keys(built.patch).length === 0) {
-      return usage('btid person edit needs at least one field to change', context.out, context.json)
+      return usage(`btid ${context.form} needs at least one field to change`, context.out, context.json)
     }
 
     const result = context.store.updatePersons([{ id, patch: built.patch }] as Parameters<Store['updatePersons']>[0])
@@ -594,16 +589,16 @@ function personPatchFromFlags(context: VerbContext): { patch: Record<string, unk
 const removeFlagHelp = 'refused without it: deleting is the one action with no undo'
 
 const taskRemove: Verb = {
-  name: 'task remove',
-  summary: `Delete a task. Needs --yes (${removeFlagHelp}).`,
-  usage: 'btid task remove <id> --yes [--json] [--dry-run]',
+  name: 'remove task/<id>',
+  summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
+  usage: 'btid remove task/<id> --yes [--json] [--dry-run]',
   flags: { yes: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid task remove <id> --yes', context.out, context.json)
+    if (id === undefined) return usage('btid remove task/<id> --yes', context.out, context.json)
     if (context.flags['yes'] !== true) {
-      return usage(`btid task remove deletes a row and cannot be undone. Pass --yes to mean it.`, context.out, context.json)
+      return usage(`btid remove task/<id> deletes a row and cannot be undone. Pass --yes to mean it.`, context.out, context.json)
     }
 
     const result = context.store.task(id).remove()
@@ -620,16 +615,16 @@ const taskRemove: Verb = {
 }
 
 const projectRemove: Verb = {
-  name: 'project remove',
-  summary: `Delete a project, and its tasks with --cascade. Needs --yes (${removeFlagHelp}).`,
-  usage: 'btid project remove <id> --yes [--cascade] [--json] [--dry-run]',
+  name: 'remove project/<id>',
+  summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
+  usage: 'btid remove project/<id> --yes [--cascade] [--json] [--dry-run]',
   flags: { yes: 'boolean', cascade: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid project remove <id> --yes', context.out, context.json)
+    if (id === undefined) return usage('btid remove project/<id> --yes', context.out, context.json)
     if (context.flags['yes'] !== true) {
-      return usage('btid project remove deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
+      return usage('btid remove project/<id> deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
     }
 
     const result = context.store.project(id).remove({ cascade: context.flags['cascade'] === true })
@@ -649,16 +644,16 @@ const projectRemove: Verb = {
 }
 
 const personRemove: Verb = {
-  name: 'person remove',
-  summary: `Delete somebody from the roster. Needs --yes (${removeFlagHelp}).`,
-  usage: 'btid person remove <id> --yes [--json] [--dry-run]',
+  name: 'remove person/<id>',
+  summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
+  usage: 'btid remove person/<id> --yes [--json] [--dry-run]',
   flags: { yes: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid person remove <id> --yes', context.out, context.json)
+    if (id === undefined) return usage('btid remove person/<id> --yes', context.out, context.json)
     if (context.flags['yes'] !== true) {
-      return usage('btid person remove deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
+      return usage('btid remove person/<id> deletes a row and cannot be undone. Pass --yes to mean it.', context.out, context.json)
     }
 
     const result = context.store.person(id).remove()
@@ -676,12 +671,12 @@ const personRemove: Verb = {
 
 /** One project, by key. The read a plan uses to reuse a row it did not create. */
 const projectShow: Verb = {
-  name: 'project show',
-  summary: 'Print one project.',
-  usage: 'btid project show <id> [--json]',
+  name: 'show project/<id>',
+  summary: 'Read one row.',
+  usage: 'btid show project/<id> [--json]',
   async run(context) {
     const id = context.args[0]
-    if (id === undefined) return usage('btid project show <id>', context.out, context.json)
+    if (id === undefined) return usage('btid show project/<id>', context.out, context.json)
 
     const handle = context.store.project(id)
     const row = handle.row
@@ -704,12 +699,12 @@ const projectShow: Verb = {
 
 /** One person, by roster id **or** GitHub handle — a plan author has one or the other. */
 const personShow: Verb = {
-  name: 'person show',
-  summary: 'Print one person, by roster id or GitHub handle.',
-  usage: 'btid person show <id|handle> [--json]',
+  name: 'show person/<id>',
+  summary: 'Read one row.',
+  usage: 'btid show person/<id> [--json]',
   async run(context) {
     const who = context.args[0]
-    if (who === undefined) return usage('btid person show <id|handle>', context.out, context.json)
+    if (who === undefined) return usage('btid show person/<id>', context.out, context.json)
 
     // A roster id is a slug of the login, so the two often coincide; the handle is checked too because a renamed person keeps
     // the id they were created with.
@@ -775,7 +770,8 @@ const plan: Verb = {
         const flags = Object.entries(step.flags)
           .map(([flag, value]) => (value === true ? `--${flag}` : `--${flag} ${String(value)}`))
           .join(' ')
-        context.out.line(`${String(step.at).padStart(2)}  ${name}${step.verb} ${[...step.args, flags].filter((part) => part !== '').join(' ')}`.trimEnd())
+        const path = step.path === '' ? '' : ` ${step.path}`
+        context.out.line(`${String(step.at).padStart(2)}  ${name}${step.verb}${path} ${[...step.args, flags].filter((part) => part !== '').join(' ')}`.trimEnd())
       }
       context.out.line(`${parsed.steps.length} steps, nothing run`)
       return 0
@@ -806,41 +802,40 @@ const plan: Verb = {
   },
 }
 
-const labelActions = new Set(['add', 'remove'])
+// --- labels -------------------------------------------------------------------------
 
 /**
- * `btid task label add <id> <label>` / `remove`.
+ * Labels are data, never a segment.
  *
- * The `--labels` flag on `task edit` replaces the whole list, which is the wrong tool for "this task is also urgent" and a
- * dangerous one when two people edit at once. These two change one label, and say `unchanged` when the row already agrees —
- * a script that re-runs must not have to read first.
+ * `add task/<id>/label ui` and `remove task/<id>/label ui` take the name as an argument, because a label *is* its text
+ * and text may contain spaces or `/`; a path segment would need an escaping rule. `--labels` on `edit task/<id>` replaces
+ * the whole list, which is the wrong tool for "this task is also urgent" — these two change one label, and say `unchanged`
+ * when the row already agrees, so a script that re-runs need not read first.
  */
-const taskLabel: Verb = {
-  name: 'task label',
-  summary: 'Add or remove one label on a task. Adding a new one lets the project learn it.',
-  usage: 'btid task label <add|remove> <id> <label> [--json] [--dry-run]',
+const labelAdd: Verb = {
+  name: 'add task/<id>/label',
+  summary: 'Attach a label that already exists in the project’s vocabulary.',
+  usage: 'btid add task/<id>/label <name> [--json] [--dry-run]',
   flags: { 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const [action, id, label] = [context.args[0], context.args[1], context.args[2]]
-    if (action === undefined || !labelActions.has(action) || id === undefined || label === undefined) {
-      return usage('btid task label <add|remove> <id> <label>', context.out, context.json)
-    }
+    const id = context.args[0]
+    const label = context.args.slice(1).join(' ').trim()
+    if (id === undefined || label === '') return usage('btid add task/<id>/label <name>', context.out, context.json)
 
     const before = context.store.task(id).row
-    const result =
-      action === 'add' ? context.store.task(id).addLabel(label) : context.store.task(id).removeLabel(label)
+    const result = context.store.task(id).addLabel(label)
     if (!result.ok) return refusal(result, context.out, context.json)
 
     const unchanged = before !== undefined && before.rev === result.value.rev
-    const committed = await commit(context, `${action === 'add' ? 'label' : 'unlabel'} ${id} ${label}`)
+    const committed = await commit(context, `label ${id} ${label}`)
     if (committed !== null && committed !== 0) return committed
 
     if (context.json) context.out.json(result.value)
     else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${label}`)
     else {
       context.out.line(
-        `${action === 'add' ? 'labeled  ' : 'unlabeled'}  ${result.value.taskId}   ${label}   ${
+        `labeled  ${result.value.taskId}   ${label}   ${
           result.value.labels.length === 0 ? 'no labels' : result.value.labels.join(', ')
         }`,
       )
@@ -849,92 +844,271 @@ const taskLabel: Verb = {
   },
 }
 
-const stepActions = new Set(['new', 'add', 'rename', 'done', 'undo', 'remove'])
-
-/**
- * `btid task step add|rename|done|undo|remove <id> …`
- *
- * A step is addressed by its id or by its 1-based position (`btid task step done alpha-a1b2 2`), because a person reads the
- * list and a script holds the id. Ticking one that is already done says `unchanged` and writes nothing.
- */
-const taskStep: Verb = {
-  name: 'task step',
-  summary: 'Add, rename, tick, untick or remove one step of a task.',
-  usage: 'btid task step <new|rename|done|undo|remove> <id> [step-id] [--name text] [--json] [--dry-run]',
-  flags: { name: 'value', 'dry-run': 'boolean' },
+const labelRemove: Verb = {
+  name: 'remove task/<id>/label',
+  summary: 'Detach one label from a task. The project keeps it.',
+  usage: 'btid remove task/<id>/label <name> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
-    const [action, id, ref] = [context.args[0], context.args[1], context.args[2]]
-    const name = stringFlag(context.flags, 'name')
-    if (action === undefined || !stepActions.has(action) || id === undefined) {
-      return usage('btid task step <new|rename|done|undo|remove> <id> [step-id] [--name text]', context.out, context.json)
-    }
+    const id = context.args[0]
+    const label = context.args.slice(1).join(' ').trim()
+    if (id === undefined || label === '') return usage('btid remove task/<id>/label <name>', context.out, context.json)
 
     const before = context.store.task(id).row
-    const handle = context.store.task(id)
-    let result
-    let message: string
-    let removed: { id: string; name: string } | undefined
-    switch (action) {
-      case 'new':
-      case 'add': {
-        if (name === null) return usage('btid task step new <id> --name <text>', context.out, context.json)
-        result = handle.addStep(name)
-        message = `step new ${id}`
-        break
-      }
-      case 'rename': {
-        if (ref === undefined || name === null) {
-          return usage('btid task step rename <id> <step-id> --name <text>', context.out, context.json)
-        }
-        result = handle.renameStep(ref, name)
-        message = `step rename ${id} ${ref}`
-        break
-      }
-      case 'done':
-      case 'undo': {
-        if (ref === undefined) return usage(`btid task step ${action} <id> <step-id>`, context.out, context.json)
-        result = handle.setStepDone(ref, action === 'done')
-        message = `step ${action} ${id} ${ref}`
-        break
-      }
-      default: {
-        if (ref === undefined) return usage('btid task step remove <id> <step-id>', context.out, context.json)
-        removed = before?.steps.find((step) => step.id === ref.trim())
-        result = handle.removeStep(ref)
-        message = `step remove ${id} ${ref}`
-      }
-    }
+    const result = context.store.task(id).removeLabel(label)
     if (!result.ok) return refusal(result, context.out, context.json)
 
     const unchanged = before !== undefined && before.rev === result.value.rev
-    const committed = await commit(context, message)
+    const committed = await commit(context, `unlabel ${id} ${label}`)
     if (committed !== null && committed !== 0) return committed
 
     if (context.json) context.out.json(result.value)
-    else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${action} ${ref ?? name}`)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.taskId}   ${label}`)
     else {
-      // Nothing is gone silently: the removed step is named, with the id and the name that would recreate it.
-      if (removed !== undefined) context.out.line(`removed  ${removed.id}  "${removed.name}"`)
-      const total = result.value.steps.length
-      const done = result.value.steps.filter((step) => step.done).length
-      // The id is printed because it is the only thing that addresses a step; the number is for reading.
-      const listed = result.value.steps.map(
-        (step, index) => `${String(index + 1).padStart(2)}. ${step.done ? '[x]' : '[ ]'} ${step.id}  ${step.name}`,
+      context.out.line(
+        `unlabeled  ${result.value.taskId}   ${label}   ${
+          result.value.labels.length === 0 ? 'no labels' : result.value.labels.join(', ')
+        }`,
       )
-      context.out.line(`step  ${result.value.taskId}   ${total === 0 ? 'no steps' : `${done}/${total} done`}`)
-      for (const line of listed) context.out.line(`  ${line}`)
     }
     return 0
+  },
+}
+
+/** The labels on one task: the collection `ls task/<id>/label` reads. */
+const labelLs: Verb = {
+  name: 'ls task/<id>/label',
+  summary: 'List rows: tasks, projects, people, or a task’s steps and labels.',
+  usage: 'btid ls task/<id>/label [--json]',
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid ls task/<id>/label', context.out, context.json)
+    const row = context.store.task(id).row
+    if (row === undefined) {
+      return refusal(
+        { ok: false, code: 'TASK_NOT_FOUND', reason: `Task ${id} is not in the store.` },
+        context.out,
+        context.json,
+      )
+    }
+    if (context.json) {
+      context.out.json(row.labels)
+      return 0
+    }
+    context.out.line(row.labels.length === 0 ? `no labels  ${id}` : `labels  ${id}   ${row.labels.join(', ')}`)
+    return 0
+  },
+}
+
+// --- steps --------------------------------------------------------------------------
+
+/** The checklist, with the id visible because it is the only thing that addresses a step. */
+function printStepAnswer(
+  context: VerbContext,
+  task: Task,
+  unchanged: boolean,
+  what: string,
+  removed?: { id: string; name: string },
+): number {
+  if (context.json) {
+    context.out.json(task)
+    return 0
+  }
+  if (unchanged) {
+    context.out.line(`unchanged  ${task.taskId}   ${what}`)
+    return 0
+  }
+  // Nothing is gone silently: the removed step is named, with the id and the name that would recreate it.
+  if (removed !== undefined) context.out.line(`removed  ${removed.id}  "${removed.name}"`)
+  const total = task.steps.length
+  const done = task.steps.filter((step) => step.done).length
+  const listed = task.steps.map(
+    (step, index) => `${String(index + 1).padStart(2)}. ${step.done ? '[x]' : '[ ]'} ${step.id}  ${step.name}`,
+  )
+  context.out.line(`step  ${task.taskId}   ${total === 0 ? 'no steps' : `${done}/${total} done`}`)
+  for (const line of listed) context.out.line(`  ${line}`)
+  return 0
+}
+
+/** The checklist `ls task/<id>/step` reads. */
+const stepLs: Verb = {
+  name: 'ls task/<id>/step',
+  summary: 'List rows: tasks, projects, people, or a task’s steps and labels.',
+  usage: 'btid ls task/<id>/step [--json]',
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid ls task/<id>/step', context.out, context.json)
+    const handle = context.store.task(id)
+    const row = handle.row
+    if (row === undefined) {
+      return refusal(
+        { ok: false, code: 'TASK_NOT_FOUND', reason: `Task ${id} is not in the store.` },
+        context.out,
+        context.json,
+      )
+    }
+    if (context.json) {
+      context.out.json(handle.steps)
+      return 0
+    }
+    return printStepAnswer(context, row, false, id)
+  },
+}
+
+/** One step, by its id — never by its position, which changes when another step is removed. */
+const stepShow: Verb = {
+  name: 'show task/<id>/step/<step-id>',
+  summary: 'Read one row.',
+  usage: 'btid show task/<id>/step/<step-id> [--json]',
+  async run(context) {
+    const [id, stepId] = [context.args[0], context.args[1]]
+    if (id === undefined || stepId === undefined) {
+      return usage('btid show task/<id>/step/<step-id>', context.out, context.json)
+    }
+    const row = context.store.task(id).row
+    if (row === undefined) {
+      return refusal(
+        { ok: false, code: 'TASK_NOT_FOUND', reason: `Task ${id} is not in the store.` },
+        context.out,
+        context.json,
+      )
+    }
+    const step = row.steps.find((candidate) => candidate.id === stepId.trim())
+    if (step === undefined) {
+      const has = row.steps.length === 0 ? 'none' : row.steps.map((candidate) => `${candidate.id} ${candidate.name}`).join('; ')
+      return refusal(
+        { ok: false, code: 'STEP_NOT_FOUND', reason: `No step “${stepId}” on ${id}. It has: ${has}.` },
+        context.out,
+        context.json,
+      )
+    }
+    context.result = step
+    if (context.json) context.out.json(step)
+    else {
+      context.out.line(`${step.id}  ${step.name}`)
+      context.out.line(`  ${step.done ? 'done' : 'open'}`)
+    }
+    return 0
+  },
+}
+
+const stepNew: Verb = {
+  name: 'new task/<id>/step',
+  summary: 'Create one row; the store mints the id.',
+  usage: 'btid new task/<id>/step --name <text> [--json] [--dry-run]',
+  flags: { name: 'value', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const name = stringFlag(context.flags, 'name')
+    if (id === undefined || name === null) return usage('btid new task/<id>/step --name <text>', context.out, context.json)
+
+    const handle = context.store.task(id)
+    const before = handle.row
+    const result = handle.addStep(name)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `step new ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    return printStepAnswer(context, result.value, unchanged, name)
+  },
+}
+
+const stepRename: Verb = {
+  name: 'rename task/<id>/step/<step-id>',
+  summary: 'Rename one step.',
+  usage: 'btid rename task/<id>/step/<step-id> --name <text> [--json] [--dry-run]',
+  flags: { name: 'value', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const [id, stepId] = [context.args[0], context.args[1]]
+    const name = stringFlag(context.flags, 'name')
+    if (id === undefined || stepId === undefined || name === null) {
+      return usage('btid rename task/<id>/step/<step-id> --name <text>', context.out, context.json)
+    }
+
+    const handle = context.store.task(id)
+    const before = handle.row
+    const result = handle.renameStep(stepId, name)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `step rename ${id} ${stepId}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    return printStepAnswer(context, result.value, unchanged, name)
+  },
+}
+
+/** `done` and `undo` are each other's inverse: the state is a boolean, so nothing is lost either way. */
+const stepTick = (done: boolean): Verb => ({
+  name: `${done ? 'done' : 'undo'} task/<id>/step/<step-id>`,
+  summary: done ? 'Tick one step.' : 'Untick one step.',
+  usage: `btid ${done ? 'done' : 'undo'} task/<id>/step/<step-id> [--json] [--dry-run]`,
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const [id, stepId] = [context.args[0], context.args[1]]
+    if (id === undefined || stepId === undefined) {
+      return usage(`btid ${done ? 'done' : 'undo'} task/<id>/step/<step-id>`, context.out, context.json)
+    }
+
+    const handle = context.store.task(id)
+    const before = handle.row
+    const result = handle.setStepDone(stepId, done)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `step ${done ? 'done' : 'undo'} ${id} ${stepId}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    return printStepAnswer(context, result.value, unchanged, stepId)
+  },
+})
+
+const stepDone = stepTick(true)
+const stepUndo = stepTick(false)
+
+const stepRemove: Verb = {
+  name: 'remove task/<id>/step/<step-id>',
+  summary: 'Delete a row, detach a label, or remove a step. A row needs --yes.',
+  usage: 'btid remove task/<id>/step/<step-id> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const [id, stepId] = [context.args[0], context.args[1]]
+    if (id === undefined || stepId === undefined) {
+      return usage('btid remove task/<id>/step/<step-id>', context.out, context.json)
+    }
+
+    const handle = context.store.task(id)
+    const before = handle.row
+    const removed = before?.steps.find((step) => step.id === stepId.trim())
+    const result = handle.removeStep(stepId)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.rev === result.value.rev
+    const committed = await commit(context, `step remove ${id} ${stepId}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    return printStepAnswer(context, result.value, unchanged, stepId, removed)
   },
 }
 
 // --- cache --------------------------------------------------------------------------
 
 const cacheShow: Verb = {
-  name: 'cache show',
-  summary: 'Where the store snapshot lives, and what is in it. Needs no store.',
-  usage: 'btid cache show [--json]',
+  name: 'show cache',
+  summary: 'Read one row.',
+  usage: 'btid show cache [--json]',
+  noStore: true,
   async run(context) {
     const root = context.cacheDir
     const entries = listCache(root)
@@ -961,9 +1135,10 @@ const cacheShow: Verb = {
 }
 
 const cacheClear: Verb = {
-  name: 'cache clear',
-  summary: 'Delete every store snapshot. Needs no store; the next read rebuilds them.',
-  usage: 'btid cache clear [--json]',
+  name: 'clear cache',
+  summary: 'Drop every snapshot. The next read rebuilds them.',
+  usage: 'btid clear cache [--json]',
+  noStore: true,
   async run(context) {
     const root = context.cacheDir
     const before = listCache(root)
@@ -985,9 +1160,9 @@ const cacheClear: Verb = {
 // --- store --------------------------------------------------------------------------
 
 const storeWhoami: Verb = {
-  name: 'store whoami',
-  summary: 'Say which store this session is pointed at, and who it acts as.',
-  usage: 'btid store whoami [--json]',
+  name: 'whoami',
+  summary: 'Say which store this session points at, and who it acts as.',
+  usage: 'btid whoami [--json]',
   async run(context) {
     const actor = context.store.actor
     const people = context.store.all('person').length
@@ -1007,9 +1182,9 @@ const storeWhoami: Verb = {
 }
 
 const storeInit: Verb = {
-  name: 'store init',
-  summary: 'Create a store: the config, and you as its manager.',
-  usage: 'btid store init [--json]',
+  name: 'new store',
+  summary: 'Create one row; the store mints the id.',
+  usage: 'btid new store [--json]',
   writes: true,
   async run(context) {
     // The store is already created by the time a verb runs (the dispatcher uses initStore for this verb), so there is
@@ -1029,6 +1204,7 @@ const version: Verb = {
   name: 'version',
   summary: 'Which btid this is, and which schema it speaks.',
   usage: 'btid version [--json]',
+  noStore: true,
   async run(context) {
     const line = versionLine(EXPECT)
     if (context.json) {
@@ -1040,16 +1216,17 @@ const version: Verb = {
   },
 }
 
-/** The registry: what the parser dispatches on, and what `btid help` reads. */
-export const VERBS: readonly Verb[] = [
+/**
+ * The handlers, by implementation. The grammar table carries the ones that apply to a verb × path; nothing dispatches on
+ * these names, so the table is still the only list of what a person may type.
+ */
+export const HANDLERS = {
   taskLs,
   taskShow,
-  taskLabel,
-  taskStep,
-  taskPromote,
-  taskRemove,
   taskNew,
   taskEdit,
+  taskPromote,
+  taskRemove,
   projectLs,
   projectShow,
   projectNew,
@@ -1060,20 +1237,20 @@ export const VERBS: readonly Verb[] = [
   personNew,
   personEdit,
   personRemove,
-  plan,
-  storeWhoami,
-  storeInit,
+  labelLs,
+  labelAdd,
+  labelRemove,
+  stepLs,
+  stepShow,
+  stepNew,
+  stepRename,
+  stepDone,
+  stepUndo,
+  stepRemove,
   cacheShow,
   cacheClear,
+  storeInit,
+  storeWhoami,
+  plan,
   version,
-]
-
-export const findVerb = (name: string): Verb | undefined => VERBS.find((verb) => verb.name === name)
-
-/** A step a plan may run: a verb that writes, a `show`, or `whoami` — and nothing that lists. */
-const PLAN_READS = new Set(['task show', 'project show', 'person show', 'store whoami'])
-
-export const isPlanStep = (name: string): boolean => {
-  const verb = findVerb(name)
-  return verb !== undefined && (verb.writes === true || PLAN_READS.has(name))
-}
+} as const

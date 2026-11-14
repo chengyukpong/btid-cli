@@ -32,15 +32,15 @@ tab — so the next command asks for the branch head and nothing else. `docs/ope
 
 ## The grammar
 
-**[docs/grammar.md](docs/grammar.md)** — `btid <verb> <path> [data]`. Fourteen verbs, a path tree, and data always named:
-`promote task/alpha-n7qk`, `add task/alpha-n7qk/label ui`, `done task/alpha-n7qk/step/st-a1b2`. Settled 2026-11-12; the CLI
-on this machine still speaks the older `task promote alpha-n7qk` until 0.12.0 ships.
+**[docs/grammar.md](docs/grammar.md)** — `btid <verb> <path> [data]`. Fifteen verbs, a path tree, and data always named:
+`promote task/alpha-n7qk`, `add task/alpha-n7qk/label ui`, `done task/alpha-n7qk/step/st-a1b2`. Settled 2026-11-12 and
+shipped in 0.12.0 as a hard cut: the old `task promote alpha-n7qk` spellings are refused with a message naming the new form.
 
 ## One task, end to end
 
-[`docs/lifecycle-of-a-task.md`](docs/lifecycle-of-a-task.md) follows a single imaginary task from `task new` to `task edit
---status done`: every command, every refusal at the moment it happens, the row's state after each one, and the two lifecycle
-moments (archive, delete) that still have no verb.
+[`docs/lifecycle-of-a-task.md`](docs/lifecycle-of-a-task.md) follows a single imaginary task from `new task` to `edit
+task/alpha-n7qk --status done`: every command, every refusal at the moment it happens, the row's state after each one, and
+the two lifecycle moments (archive, delete) that still have no verb.
 
 ## Driving it from an agent
 
@@ -72,12 +72,12 @@ A field the store starts validating is a field this CLI can name the day it land
 
 ## Status
 
-**Every row type can be created, changed, shown and deleted.** `task ls|show|new|edit|promote|remove`,
-`project ls|show|new|edit|remove`, `person ls|show|new|edit|remove`, `store whoami|init`, `cache show|clear`, `plan`, `version`,
-`help` — 24 verbs, 64 tests against a real `btid-core` and a real `githubdb` database with only the network replaced.
-`step`, `comment` and `archive` wait on one core command each; writing the rule here is the one thing this project must not
-do. A project takes its window at creation (`--start --end`) or later (`project edit`), because a project without both dates
-refuses every capture. A verb changes **one row** and commits once. A sequence of rows is `btid plan` — a file of commands run in order against one
+**Every row type can be created, changed, shown and deleted.** Fifteen verbs — `ls`, `show`, `new`, `edit`, `promote`,
+`remove`, `add`, `rename`, `done`, `undo`, `clear`, `plan`, `whoami`, `version`, `help` — over the path tree in the grammar;
+70 tests against a real `btid-core` and a real `githubdb` database with only the network replaced. `comment` and `archive`
+wait on one core command each; writing the rule here is the one thing this project must not do. A project takes its window
+at creation (`--start --end`) or later (`edit project/<id>`), because a project without both dates refuses every capture. A
+verb changes **one row** and commits once. A sequence of rows is `btid plan` — a file of commands run in order against one
 store, with `let`/`$task.id` threading ids between steps.
 
 ## What it is not
@@ -92,17 +92,16 @@ prose goes stale. Ask the binary:
 
 ```
 $ btid version            # which build this is, and which schema it speaks
-$ btid help --json        # every verb, its flags, the row fields, and the exit codes
-$ btid help task          # one type's fields, as a page
-$ btid help task ls       # one verb's usage and flags
+$ btid help --json        # verbs × paths, flags, the row fields, and the exit codes
+$ btid help edit          # one verb's paths, flags and an example
 ```
 
 Then the loop, which never needs English:
 
 ```
 1. read btid help --json                       → what exists, what it takes, what the rows look like
-2. btid <type> <verb> … --dry-run --json       → would this work? (runs the command, commits nothing)
-3. btid <type> <verb> … --json                 → do it; on a refusal, exit 1 and the core's sentence in "message"
+2. btid <verb> <path> … --dry-run --json       → would this work? (runs the command, commits nothing)
+3. btid <verb> <path> … --json                 → do it; on a refusal, exit 1 and the core's sentence in "message"
 ```
 
 Two rules for this file, then: **examples here stay few**, because every line in a README is a test nobody runs; and the

@@ -43,7 +43,7 @@ head — and either hydrates the rows it already has or loads the store afresh:
   `btid2` found for the same JSON.
 - `--fresh` ignores the snapshot for one call and writes a new one from a real load.
 - `BTID_NO_CACHE=1` turns it off for a session; `BTID_CACHE_DIR` moves it.
-- `btid cache show` prints the directory and what is in it; `btid cache clear` deletes every snapshot — both work with no
+- `btid show cache` prints the directory and what is in it; `btid clear cache` deletes every snapshot — both work with no
   store and no token. A snapshot that will not decode is deleted on sight rather than parsed and rejected on every command.
 - **A write refreshes the snapshot rather than dropping it.** The commit sha comes back from the write itself, so the rows
   need no request; the listing is re-read with **one** tree call, because `githubdb`'s post-write baseline is built from paths
@@ -104,12 +104,12 @@ projects 0
 ```
 
 The repository must already exist and the token must have `Contents: write`. Creating a repository is GitHub's job, not
-this CLI's; creating the **store inside it** is `btid store init`.
+this CLI's; creating the **store inside it** is `btid new store`.
 
 ## 3. Create a store, once
 
 ```console
-$ btid store init
+$ btid new store
 init  yuk-org/btid-store@main
       manager chengyukpong
 ```
@@ -120,13 +120,13 @@ init` on the same repository is refused — a store's version is not something t
 ## 4. The loop an agent actually runs
 
 ```console
-$ btid project new alpha "Alpha One" --start 2026-10-26 --end 2026-11-23   # key normalised: Alpha → alpha
-$ btid task new --project alpha --title "Check the header budgets"
+$ btid new project --key alpha --name "Alpha One" --start 2026-10-26 --end 2026-11-23   # key normalised: Alpha → alpha
+$ btid new task --project alpha --title "Check the header budgets"
 captured  alpha-n0qz   backlog   Check the header budgets
 
-$ btid task ls projectId=alpha status=backlog
-$ btid task show alpha-n0qz
-$ btid task edit alpha-n0qz --end 2026-11-20 --note "Client moved the review."
+$ btid ls task projectId=alpha status=backlog
+$ btid show task/alpha-n0qz
+$ btid edit task/alpha-n0qz --end 2026-11-20 --note "Client moved the review."
 ```
 
 Every write is **one commit**, named after the verb and the row (`capture alpha-n0qz`, `edit alpha-n0qz`). There is no
@@ -137,15 +137,15 @@ autosave and no batch: a verb that succeeds has already written, and a verb that
 A store is not useful until it has a project, a roster and a dozen tasks, and every one of them is a command:
 
 ```console
-$ btid project new alpha "Alpha One" --start 2026-10-26 --end 2026-11-23
+$ btid new project --key alpha --name "Alpha One" --start 2026-10-26 --end 2026-11-23
 project  alpha   Alpha One
 
-$ btid person new ivan --name Ivan
+$ btid new person --handle ivan --name Ivan
 person  ivan   Ivan   member
 
-$ btid task new --project alpha --title "Check the header budgets"
+$ btid new task --project alpha --title "Check the header budgets"
 captured  alpha-n0qz   backlog   Check the header budgets
-$ btid task new --project alpha --title "Write the failing test" --priority urgent
+$ btid new task --project alpha --title "Write the failing test" --priority urgent
 captured  alpha-c3d4   backlog   Write the failing test
 ```
 
@@ -210,13 +210,13 @@ Nothing is settable only by editing JSON. The three `edit` verbs cover the three
 urgent" and a dangerous one when two people edit at once; `--file` is gone. So:
 
 ```console
-$ btid task label add alpha-jbbs ui
+$ btid add task/alpha-jbbs/label ui
 labeled    alpha-jbbs   ui   ui
-$ btid task label add alpha-jbbs billing
+$ btid add task/alpha-jbbs/label billing
 labeled    alpha-jbbs   billing   ui, billing
-$ btid task label add alpha-jbbs billing        # already there: no write, and it says so
+$ btid add task/alpha-jbbs/label billing        # already there: no write, and it says so
 unchanged  alpha-jbbs   billing
-$ btid task label remove alpha-jbbs ui
+$ btid remove task/alpha-jbbs/label ui
 unlabeled  alpha-jbbs   ui   billing
 ```
 
@@ -224,21 +224,21 @@ A label a task brings still joins its project, exactly as an edit's would; remov
 other tasks may use it.
 
 ```console
-$ btid task step new alpha-jbbs --name "Measure the header at 1440"
+$ btid new task/alpha-jbbs/step --name "Measure the header at 1440"
 step  alpha-jbbs   0/1 done
   1. [ ] st-a1b2  Measure the header at 1440
-$ btid task step new alpha-jbbs --name "Sketch the fix"
+$ btid new task/alpha-jbbs/step --name "Sketch the fix"
 step  alpha-jbbs   0/2 done
   1. [ ] st-a1b2  Measure the header at 1440
   2. [ ] st-c3d4  Sketch the fix
-$ btid task step done alpha-jbbs st-a1b2        # a step is addressed by its id
+$ btid done task/alpha-jbbs/step/st-a1b2        # a step is addressed by its id
 step  alpha-jbbs   1/2 done
   1. [x] st-a1b2  Measure the header at 1440
   2. [ ] st-c3d4  Sketch the fix
-$ btid task step rename alpha-jbbs st-c3d4 --name "Sketch the fix, in pencil"
-$ btid task step undo alpha-jbbs st-a1b2        # a step can be reopened
-$ btid task step remove alpha-jbbs st-c3d4
-$ btid task step done alpha-jbbs 2              # the position is not an address
+$ btid rename task/alpha-jbbs/step/st-c3d4 --name "Sketch the fix, in pencil"
+$ btid undo task/alpha-jbbs/step/st-a1b2        # a step can be reopened
+$ btid remove task/alpha-jbbs/step/st-c3d4
+$ btid done task/alpha-jbbs/step/2              # the position is not an address
 refused: No step “2” on alpha-jbbs. It has: st-a1b2 Measure the header at 1440. A step is addressed by its id, not by its
 position — the number changes when one is removed. (STEP_NOT_FOUND)
 ```
@@ -249,8 +249,8 @@ it — so the id (`st-` plus four characters) is the address, minted once and ke
 **`done` and `undo` are each other's inverse** — the state is a boolean, so nothing is lost either way:
 
 ```console
-$ btid task step done alpha-n7qk st-a1b2        # 1/2 done
-$ btid task step undo alpha-n7qk st-a1b2        # 0/2 done
+$ btid done task/alpha-n7qk/step/st-a1b2        # 1/2 done
+$ btid undo task/alpha-n7qk/step/st-a1b2        # 0/2 done
 ```
 
 **`label remove` is recoverable by name** (`label add ui`), because a label *is* its text.
@@ -258,14 +258,14 @@ $ btid task step undo alpha-n7qk st-a1b2        # 0/2 done
 **`step remove` is not recoverable in the CLI**, and the transcript says what went so it can be put back:
 
 ```console
-$ btid task step remove alpha-n7qk st-c3d4
+$ btid remove task/alpha-n7qk/step/st-c3d4
 removed  st-c3d4  "Draft the 1440 measurement"
 ```
 
 The real undo is the store itself: every command is one commit, so a removed step (or task) can be brought back on a clone with
-`git revert <commit>`, then `btid cache clear` and a read. The CLI has no history of its own, on purpose — the store does.
+`git revert <commit>`, then `btid clear cache` and a read. The CLI has no history of its own, on purpose — the store does.
 
-Creation is `new`, like every other creator in this CLI; `btid task step add` is accepted as a synonym. Ticking a step that is
+Creation is `new`, like every other creator in this CLI: `btid new task/<id>/step --name "…"`. Ticking a step that is
 already done, or adding a label the task already has, writes nothing and prints `unchanged` — a script
 that re-runs must not have to read first. Every one of these is the same task write as an edit: same permission check, same
 revision bump, same activity log.
@@ -273,15 +273,15 @@ revision bump, same activity log.
 **Deleting** exists for all three types, and asks first — `--yes` is required, because deleting is the one action with no undo:
 
 ```console
-$ btid task remove alpha-a1b2                 # exits 2: "deletes a row and cannot be undone. Pass --yes to mean it."
-$ btid task remove alpha-a1b2 --yes
+$ btid remove task/alpha-a1b2                 # exits 2: "deletes a row and cannot be undone. Pass --yes to mean it."
+$ btid remove task/alpha-a1b2 --yes
 removed  alpha-a1b2   Check the header budgets
 
-$ btid project remove alpha --yes             # refused: PROJECT_NOT_EMPTY, "still holds 3 tasks… remove it with --cascade"
-$ btid project remove alpha --yes --cascade   # and its tasks with it
+$ btid remove project/alpha --yes             # refused: PROJECT_NOT_EMPTY, "still holds 3 tasks… remove it with --cascade"
+$ btid remove project/alpha --yes --cascade   # and its tasks with it
 removed  alpha   Alpha One   and 3 tasks
 
-$ btid person remove ivan --yes               # refused: PERSON_IN_USE while they hold work
+$ btid remove person/ivan --yes               # refused: PERSON_IN_USE while they hold work
 ```
 
 A person who has left is **deactivated** (`person edit --active off`), not deleted: removing somebody who is still an assignee or
@@ -308,9 +308,10 @@ Two values the store decides, not the flag:
   the rule is `NOT_ALLOWED` with *"Promote the item to move it onto the board."* — and the verb that does it is:
 
 ```console
-$ btid task promote alpha-b9z9              # lands in todo
-$ btid task promote alpha-b9z9 --status in_progress
-promoted  alpha-b9z9   in_progress   rev 1
+$ btid promote task/alpha-b9z9              # lands in todo, and takes no attributes
+$ btid edit task/alpha-b9z9 --status in_progress
+promoted  alpha-b9z9   todo          rev 1
+edited    alpha-b9z9   in progress   rev 2
 ```
 
 The gate is the SPA's: a title, an owner, both dates, an estimate and a definition of done. Missing any of them is
@@ -322,17 +323,17 @@ them refuses every capture with `PROJECT_NOT_READY` — deliberately, but a wall
 the way to add the window later, and it is the same command that renames or re-dates:
 
 ```console
-$ btid project edit alpha --start 2026-10-26 --end 2026-11-23
+$ btid edit project/alpha --start 2026-10-26 --end 2026-11-23
 edited  alpha   Alpha One
 
-$ btid project edit alpha --end 2026-10-01
+$ btid edit project/alpha --end 2026-10-01
 refused: A project cannot end (2026-10-01) before it starts (2026-10-26). (PROJECT_WINDOW_INVALID)
 ```
 
 Use `--dry-run` to check a write without committing it:
 
 ```console
-$ btid task edit alpha-n0qz --title "Renamed" --dry-run
+$ btid edit task/alpha-n0qz --title "Renamed" --dry-run
 would commit: edit alpha-n0qz
 ```
 
@@ -373,10 +374,10 @@ validating is a field you can name the day it lands here.
 `--json` prints the core's own object or a refusal as data:
 
 ```console
-$ btid task ls projectId=alpha --json
+$ btid ls task projectId=alpha --json
 [{"id":"alpha-n0qz","taskId":"alpha-n0qz","status":"backlog", …}]
 
-$ btid task edit alpha-a1b2 --end 2026-11-20 --json
+$ btid edit task/alpha-a1b2 --end 2026-11-20 --json
 {"error":{"kind":"refused","code":"END_DATE_NEEDS_REASON","message":"Changing the end day of a tracked task needs a reason."}}
 ```
 
@@ -386,7 +387,7 @@ $ btid task edit alpha-a1b2 --end 2026-11-20 --json
 | `1` | **refused** — a rule said no; nothing was written | read `code` / `message`, change the input or ask the person |
 | `2` | usage — the terminal could not parse the flags | fix the call; `btid help <verb>` is the answer |
 | `4` | conflict — somebody else committed first | reopen and retry; the write was not attempted |
-| `5` | there is no store in that repository | run `btid store init`, once |
+| `5` | there is no store in that repository | run `btid new store`, once |
 | `2` (fault) | the store is at another schema version | do not migrate by hand; report it |
 
 The codes worth branching on today: `END_DATE_NEEDS_REASON`, `TITLE_REQUIRED`, `TASK_NOT_FOUND`, `PROJECT_MISSING`,
