@@ -1,8 +1,8 @@
-import { BOARD_SORTS, EXPECT } from 'btid-core'
+import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from 'btid-core'
 import type { BoardSort, CreateProjectInput, CreateTaskInput, Store, Task, TaskHandle } from 'btid-core'
 import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
-import { dayOf, describeStore } from './output'
+import { dayOf, describeStore, table } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
 import type { Column } from './output'
 import { fieldsOf, printRows, refusal, usage, type Verb, type VerbContext } from './verb'
@@ -74,7 +74,7 @@ async function commit(context: VerbContext, message: string): Promise<number | n
 
 const taskColumns: readonly Column<Task>[] = [
   { title: 'ID', value: (row) => row.taskId },
-  { title: 'STATUS', value: (row) => row.status },
+    { title: 'STATUS', value: (row) => STATUS_LABELS[row.status].toLowerCase() },
   { title: 'PRIORITY', value: (row) => row.priority },
   { title: 'OWNER', value: (row) => row.assigneeId ?? '—' },
   { title: 'END', value: (row) => dayOf(row.endDate) },
@@ -701,15 +701,41 @@ const projectShow: Verb = {
       return refusal({ ok: false, code: 'PROJECT_NOT_FOUND', reason: `Project ${id} is not in the store.` }, context.out, context.json)
     }
 
-    const tasks = handle.tasks()
-    context.result = row
-    if (context.json) {
-      context.out.json({ ...row, tasks: tasks.total })
+      const tasks = handle.tasks()
+      context.result = row
+      if (context.json) {
+        context.out.json({ ...row, tasks: tasks.total })
+        return 0
+      }
+
+      // A page, not a row: what the project is, how its work is spread, and the work itself. The values line up because the
+      // labels do — `window`, `work`, `status`, `effort` are the same width.
+      const owners = new Set(tasks.rows.map((task) => task.assigneeId).filter((id): id is string => id !== null))
+      const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
+        .filter(([, value]) => value > 0)
+        .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
+        .join(" · ")
+      const effort = tasks.mandays()
+      const title = `${row.id}  ${row.name}`
+
+      context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.status} · owner ${row.ownerId}`)
+      context.out.line(`  window  ${dayOf(row.startDate)} → ${dayOf(row.endDate)}`)
+      context.out.line(
+        `  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"} · ${owners.size} ${owners.size === 1 ? "person" : "people"}` +
+          (row.members.length === 0 ? "" : ` · members ${row.members.join(", ")}`) +
+          (row.labels.length === 0 ? "" : ` · labels ${row.labels.join(", ")}`),
+      )
+      if (counts !== "") context.out.line(`  status  ${counts}`)
+      context.out.line(
+        `  effort  ${effort.estimate} md estimated · ${effort.scheduled} md booked · ${effort.used} md used` +
+          (effort.remaining === 0 ? "" : ` · ${effort.remaining} md left`),
+      )
+
+      if (tasks.total > 0) {
+        context.out.line("")
+        context.out.line(table(tasks.order("endDate").rows as Task[], taskColumns))
+      }
       return 0
-    }
-    context.out.line(`${row.id}  ${row.name}`)
-    context.out.line(`  owner ${row.ownerId}   members ${row.members.length === 0 ? '—' : row.members.join(', ')}   status ${row.status}`)
-    context.out.line(`  window ${dayOf(row.startDate)} → ${dayOf(row.endDate)}   tasks ${tasks.total}   labels ${row.labels.length === 0 ? '—' : row.labels.join(', ')}`)
     return 0
   },
 }
@@ -732,15 +758,30 @@ const personShow: Verb = {
     }
 
     const handle = context.store.person(row.id)
-    const tasks = handle.tasks()
-    if (context.json) {
-      context.out.json({ ...row, tasks: tasks.total })
+      const tasks = handle.tasks()
+      if (context.json) {
+        context.out.json({ ...row, tasks: tasks.total })
+        return 0
+      }
+
+      // The same page shape as a project: who this is, what they are carrying, and the rows themselves.
+      const counts = STATUS_ORDER.map((status) => [status, tasks.rows.filter((task) => task.status === status).length] as const)
+        .filter(([, value]) => value > 0)
+        .map(([status, value]) => `${value} ${STATUS_LABELS[status].toLowerCase()}`)
+        .join(" · ")
+      const effort = tasks.mandays(true)
+      const title = `${row.id}  ${row.displayName}`
+
+      context.out.line(`${title}${" ".repeat(Math.max(2, 38 - title.length))}${row.role}${row.active ? "" : " · inactive"} · @${row.githubHandle}`)
+      context.out.line(`  work    ${tasks.total} ${tasks.total === 1 ? "task" : "tasks"} on the board`)
+      if (counts !== "") context.out.line(`  status  ${counts}`)
+      context.out.line(`  effort  ${effort.estimate} md estimated · ${effort.used} md used`)
+
+      if (tasks.total > 0) {
+        context.out.line("")
+        context.out.line(table(tasks.order("endDate").rows as Task[], taskColumns))
+      }
       return 0
-    }
-    context.out.line(`${row.id}  ${row.displayName}`)
-    context.out.line(`  handle @${row.githubHandle}   role ${row.role}${row.active ? '' : '   inactive'}`)
-    context.out.line(`  tasks ${tasks.total}`)
-    return 0
   },
 }
 

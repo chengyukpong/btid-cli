@@ -285,8 +285,8 @@ $ btid remove person/ivan --yes               # refused: PERSON_IN_USE while the
 ```
 
 A person who has left is **deactivated** (`person edit --active off`), not deleted: removing somebody who is still an assignee or
-an owner would leave rows naming a ghost. And the two reads a plan uses to reuse an existing row exist too — `project show <id>`,
-`person show <id|handle>` — alongside `task show`.
+an owner would leave rows naming a ghost. And the two reads a plan uses to reuse an existing row exist too — `show project/<id>`,
+`show person/<id|handle>` — alongside `show task/<id>`.
 
 **Every verb changes one row.** An edit takes an id and its fields, a creation takes one row's worth of flags, and there is no
 list form on any of them: several changes in sequence are what `plan` will do, and a second list format on the verbs was a

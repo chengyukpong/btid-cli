@@ -472,11 +472,13 @@ describe('btid', () => {
   it('shows a project and a person, by id and by handle', async () => {
     assert.equal(await btid(['show', 'project/alpha']), 0, lines.text)
     assert.match(lines.text, /alpha {2}Alpha One/)
-    assert.match(lines.text, /tasks 1/)
+      assert.match(lines.text, /1 task/)
+      assert.match(lines.text, /md estimated/)
 
     lines.written.length = 0
     assert.equal(await btid(['show', 'person/chengyukpong']), 0, lines.text)
-    assert.match(lines.text, /chengyukpong {2}Cheng/)
+      assert.match(lines.text, /chengyukpong {2}Cheng/)
+      assert.match(lines.text, /manager · @chengyukpong/)
 
     lines.written.length = 0
     assert.equal(await btid(['show', 'person/chengyukpong', '--json']), 0)
