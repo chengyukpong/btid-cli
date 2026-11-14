@@ -32,7 +32,7 @@ export interface Rule {
 }
 
 const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskRemove } = HANDLERS
-const { projectLs, projectShow, projectNew, projectEdit, projectRemove } = HANDLERS
+const { projectLs, projectShow, projectNew, projectEdit, projectArchive, projectRemove } = HANDLERS
 const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
 const { stepLs, stepShow, stepNew, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
@@ -82,6 +82,7 @@ export const RULES: readonly Rule[] = [
 
   { verb: 'edit', path: 'task/<id>', handler: taskEdit, args: place, example: 'btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."' },
   { verb: 'edit', path: 'project/<id>', handler: projectEdit, args: place },
+  { verb: 'archive', path: 'project/<id>', handler: projectArchive, args: place, example: 'btid archive project/alpha-n7qk --yes' },
   { verb: 'edit', path: 'person/<id>', handler: personEdit, args: place },
 
   { verb: 'promote', path: 'task/<id>', handler: taskPromote, args: place, example: 'btid promote task/alpha-n7qk' },

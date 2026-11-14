@@ -289,6 +289,12 @@ export function check(plan: Plan): Plan | { message: string } {
     if (routed.kind === 'refusal') return { message: `step ${step.at}: ${routed.message}` }
     if (routed.kind !== 'rule') return { message: `step ${step.at}: that step names nothing` }
     const { rule } = routed
+      // A plan writes everything at the end, while an archive tags the commit it starts from - so the tag would name a
+      // state the plan's own work is not in yet. Refused by name rather than left to fail inside the engine.
+      if (rule.verb === 'archive') {
+        return { message: `step ${step.at}: a plan commits at the end; archive tags the commit it starts from` }
+      }
+
     const reads = rule.verb === 'show' || rule.verb === 'whoami'
     if (rule.handler.writes !== true && !reads) {
       return {

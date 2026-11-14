@@ -11,7 +11,7 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — sixteen, no two-word ones
+## Verbs — seventeen, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
@@ -21,6 +21,7 @@ by position.
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
 | `promote` | one step up the ladder: backlog → todo → in progress → done — takes no attributes | `task/<id>` |
 | `demote` | one step back down the ladder — takes no attributes | `task/<id>` |
+| `archive` | tag the store, then delete a project and its work — there is no unarchive | `project/<id>` |
 | `remove` | delete a row, or detach a label | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `task/<id>/label` |
 | `add` | attach what already exists (a label from the project's vocabulary) | `task/<id>/label` |
 | `rename` | rename a step | `task/<id>/step/<step-id>` |
@@ -29,6 +30,11 @@ by position.
 | `plan` | run a file of commands | *(a file, not a path)* |
 | `whoami` | who you are, and where you are pointing | — |
 | `version` · `help` | about the binary | — |
+
+**`archive` is the one verb that is not a field change.** It tags the store at the commit it starts from — `archive-<UTC>`,
+the state about to be deleted — then removes the project and its tasks. The tag is the copy, so **there is no
+unarchive**: getting a project back is `git checkout` on the tag, not a verb. It refuses when the store holds uncommitted
+changes, because the tag would name a commit that does not contain them, and a plan refuses it for the same reason.
 
 **A read prints the row, and nothing it computed.** `show task/<id>` prints the fields the store holds, by the names it
 holds them under, and leaves out the ones that are empty — what a reader would find in `--json`. The counts, the effort,

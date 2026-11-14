@@ -454,7 +454,7 @@ describe('btid', () => {
           firstPromotedAt: null,
           estimateDays: 2,
           definitionOfDone: 'It works.',
-        }),
+    }),
       })
 
       // Up: backlog → todo → in progress, one step per call, one commit each.
@@ -530,7 +530,37 @@ describe('btid', () => {
     assert.equal(cascaded, 0, lines.text)
     assert.match(lines.text, /removed {2}alpha {3}Alpha One {3}and 1 task/)
     assert.equal(client.messages.at(-1), 'remove project alpha')
-  })
+    })
+
+    it('archives a project: tags the commit it starts from, then deletes the work', async () => {
+      const before = await client.head()
+      lines.written.length = 0
+      const code = await btid(['archive', 'project/alpha', '--yes'])
+      assert.equal(code, 0, lines.text)
+      assert.match(lines.text, /archived {2}alpha {3}Alpha One {3}tag archive-/)
+      assert.equal(client.messages.at(-1), 'archive project alpha')
+      assert.equal(client.files.has('projects/alpha/project.json'), false)
+      assert.equal(client.files.has('projects/alpha/tasks.json'), false)
+
+      // The tag names the state that was deleted, which is the commit the deletion was built on.
+      const tag = [...client.tags.keys()][0]!
+      assert.equal(client.tags.get(tag), before)
+    })
+
+    it('refuses to archive without --yes, and says there is no unarchive', async () => {
+      const code = await btid(['archive', 'project/alpha'])
+      assert.equal(code, 2)
+      assert.match(lines.text, /There is no unarchive, so pass --yes/)
+      assert.equal(client.files.has('projects/alpha/project.json'), true, 'nothing was touched')
+    })
+
+    it('refuses an archive inside a plan, naming the commit it would tag', async () => {
+      const path = await planFile('archive.btid', ['archive project/alpha --yes'].join('\n'))
+      const code = await btid(['plan', path])
+      assert.equal(code, 2)
+      assert.match(lines.text, /archive tags the commit it starts from/)
+    })
+
 
   it('refuses to delete somebody who is still on work', async () => {
     client.put('people.json', {
@@ -837,7 +867,7 @@ describe('btid', () => {
         loginFor: async () => {
           asked += 1
           return 'chengyukpong'
-        },
+    },
       })
 
     assert.equal(await call(['whoami']), 0)

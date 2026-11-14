@@ -9,6 +9,8 @@ import type { StoreClient, CommitResult, FileChange, TagOptions, TreeListing } f
 export class FakeClient implements StoreClient {
   readonly files = new Map<string, string>()
   readonly messages: string[] = []
+  /** Archive tags, as a branch keeps them: the commit each names, plus the message an annotated tag carries. */
+  readonly tags = new Map<string, string>()
   /** The branch, as a real one behaves: a commit moves it, and head() answers what it moved to. */
   #head = 'c0'
 
@@ -47,9 +49,8 @@ export class FakeClient implements StoreClient {
   }
 
   async tag(name: string, sha: string, options: TagOptions = {}): Promise<void> {
-    void name
-    void sha
     void options
+    this.tags.set(name, sha)
   }
 
   async untag(name: string): Promise<void> {

@@ -692,6 +692,42 @@ const taskRemove: Verb = {
   },
 }
 
+const projectArchive: Verb = {
+  name: 'archive project/<id>',
+  summary: 'Tag the store, then delete the project and its work. There is no unarchive.',
+  usage: 'btid archive project/<id> --yes [--json] [--dry-run]',
+  flags: { yes: 'boolean', 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid archive project/<id> --yes', context.out, context.json)
+    if (context.flags['yes'] !== true) {
+      return usage(
+        'btid archive project/<id> tags the store and then deletes the project and its tasks. There is no unarchive, so pass --yes to mean it.',
+        context.out,
+        context.json,
+      )
+    }
+
+    // The core tags the commit it starts from, then stages the deletion; this commit is what makes the deletion real.
+    const result = await context.store.archiveProject(id)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `archive project ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else {
+      const { project, tasks, tag } = result.value
+      context.out.line(
+        `archived  ${project.id}   ${project.name}   tag ${tag}${tasks > 0 ? `   and ${tasks} ${tasks === 1 ? 'task' : 'tasks'}` : ''}`,
+      )
+    }
+    return 0
+  },
+}
+
 const projectRemove: Verb = {
   name: 'remove project/<id>',
   summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
@@ -1356,6 +1392,7 @@ export const HANDLERS = {
   projectShow,
   projectNew,
   projectEdit,
+  projectArchive,
   projectRemove,
   personLs,
   personShow,
