@@ -84,8 +84,6 @@ export const RULES: readonly Rule[] = [
   { verb: 'edit', path: 'task/<id>', handler: taskEdit, args: place, example: 'btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."' },
   { verb: 'edit', path: 'project/<id>', handler: projectEdit, args: place },
   { verb: 'archive', path: 'project/<id>', handler: projectArchive, args: place, example: 'btid archive project/alpha-n7qk --yes' },
-  { verb: 'add', path: 'project/<id>/member', handler: projectMemberAdd, args: place, example: 'btid add project/alpha-n7qk/member ivan' },
-  { verb: 'remove', path: 'project/<id>/member', handler: projectMemberRemove, args: place },
   { verb: 'edit', path: 'person/<id>', handler: personEdit, args: place },
 
   { verb: 'promote', path: 'task/<id>', handler: taskPromote, args: place, example: 'btid promote task/alpha-n7qk' },
@@ -97,8 +95,10 @@ export const RULES: readonly Rule[] = [
   { verb: 'remove', path: 'person/<id>', handler: personRemove, args: place },
   { verb: 'remove', path: 'task/<id>/step/<step-id>', handler: stepRemove, args: place },
   { verb: 'remove', path: 'task/<id>/label', handler: labelRemove, args: place },
+  { verb: 'remove', path: 'project/<id>/member', handler: projectMemberRemove, args: place },
 
   { verb: 'add', path: 'task/<id>/label', handler: labelAdd, args: place, example: 'btid add task/alpha-n7qk/label ui' },
+  { verb: 'add', path: 'project/<id>/member', handler: projectMemberAdd, args: place, example: 'btid add project/alpha-n7qk/member ivan' },
 
   { verb: 'rename', path: 'task/<id>/step/<step-id>', handler: stepRename, args: place, example: 'btid rename task/alpha-n7qk/step/st-a1b2 --name "Measure the header at 1440"' },
 
