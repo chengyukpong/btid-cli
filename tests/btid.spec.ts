@@ -30,7 +30,6 @@ const project = {
   labels: [],
   startDate: '2026-10-26',
   endDate: '2026-11-23',
-  nextTaskNumber: 1,
   createdAt: '2026-11-01T09:00:00+08:00',
   updatedAt: '2026-11-01T09:00:00+08:00',
 }
