@@ -203,7 +203,7 @@ const taskPromote: Verb = {
     const id = context.args[0]
     if (id === undefined) return usage('btid promote task/<id>', context.out, context.json)
 
-    // The crossing and nothing else: there is no status to choose. Moving a row *within* the board is `edit --status`.
+      // One step up the ladder, and nothing else: there is no status to choose, so the gates cannot be walked around.
     const result = context.store.task(id).promote()
     if (!result.ok) return refusal(result, context.out, context.json)
 
@@ -217,16 +217,39 @@ const taskPromote: Verb = {
   },
 }
 
+const taskDemote: Verb = {
+  name: 'demote task/<id>',
+  summary: 'Move a task one step back down the ladder. Takes no attributes.',
+  usage: 'btid demote task/<id> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid demote task/<id>', context.out, context.json)
+
+    // One step down, and never back up: a reason for reopening is a comment, so the pair of ladder verbs takes no flags.
+    const result = context.store.task(id).demote()
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `demote ${id}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`demoted  ${result.value.taskId}   ${result.value.status}   rev ${result.value.rev}`)
+    return 0
+  },
+}
+
 const taskEdit: Verb = {
   name: 'edit task/<id>',
   summary: 'Change one row’s fields.',
   usage:
-    'btid edit task/<id> [--title t] [--description t] [--dod t] [--status s] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
+    'btid edit task/<id> [--title t] [--description t] [--dod t] [--priority p] [--assignee id] [--start day] [--end day] [--percent n] [--estimate days|none] [--tracked on|off] [--small on|off] [--blocked on|off] [--blocked-reason t] [--blocked-by ids|none] [--labels a,b] [--note text] [--json] [--dry-run]',
   flags: {
     title: 'value',
     description: 'value',
     dod: 'value',
-    status: 'value',
     priority: 'value',
     assignee: 'value',
     start: 'value',
@@ -281,12 +304,6 @@ function taskPatchFromFlags(context: VerbContext): { patch: Record<string, unkno
   const patch: Record<string, unknown> = {}
   const title = stringFlag(context.flags, 'title')
   if (title !== null) patch['title'] = title
-  const statusText = stringFlag(context.flags, 'status')
-  if (statusText !== null) {
-    const status = statusOf(statusText)
-    if (status === null) return { message: `--status “${statusText}” is not one of backlog, todo, in_progress, done` }
-    patch['status'] = status
-  }
   const priorityText = stringFlag(context.flags, 'priority')
   if (priorityText !== null) {
     const priority = priorityOf(priorityText)
@@ -1226,6 +1243,7 @@ export const HANDLERS = {
   taskNew,
   taskEdit,
   taskPromote,
+  taskDemote,
   taskRemove,
   projectLs,
   projectShow,

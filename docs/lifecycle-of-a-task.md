@@ -101,37 +101,57 @@ Eight hours for a `09:00` start, four for `13:00`: the cap is arithmetic on the 
 
 ---
 
-## 4. Promote — the one crossing onto the board
+## 4. Promote — the ladder, one step at a time
+
+The ladder is `backlog → todo → in progress → done`, and `promote` takes one step per call. Each step has the gate that step
+is about, so a refusal tells you what the *next* step needs rather than everything at once:
 
 ```console
 $ btid promote task/alpha-n7qk
-promoted  alpha-n7qk   todo   rev 3
-```
-
-**State after**: `status todo`, `firstPromotedAt 2026-11-11T…`, `rev 3`, stage `promoted`.
-
-Two things are now true that were not before:
-
-- the row is **board work** — it appears in any `btid ls task` that filters on status;
-- **status edits are legal**. Before promotion they are not:
-
-```console
-# before promotion, on a backlog row:
-$ btid edit task/alpha-n7qk --status todo
-refused: Promote the item to move it onto the board. (NOT_ALLOWED)
-```
-
-Promotion also refuses a second crossing, and points at the right verb:
-
-```console
+promoted  alpha-n7qk   todo          rev 3      # the six fields were ready
 $ btid promote task/alpha-n7qk
-refused: alpha-n7qk is already on the board (todo). Change its status instead of promoting it again. (ALREADY_PROMOTED)
+promoted  alpha-n7qk   in_progress   rev 4      # and it is not blocked
+$ btid promote task/alpha-n7qk
+promoted  alpha-n7qk   done          rev 9      # every step ticked; percent is now 100
 ```
 
-**A demotion keeps its history**: moving a promoted row back to `backlog` makes its stage `demoted`; promoting it again
-*does not* rewrite `firstPromotedAt`, so the task's first day on the board is still its first day.
+**State after the first step**: `status todo`, `firstPromotedAt 2026-11-11T…`, stage `promoted`. The row is board work, and
+`firstPromotedAt` is never rewritten afterwards — demoting and promoting again keeps the day it first crossed.
 
----
+**Each step refuses with its own sentence:**
+
+```console
+# backlog → todo, something missing:
+$ btid promote task/alpha-n7qk
+refused: Before promotion: add an estimate and a definition of done. (PROMOTION_INCOMPLETE)
+
+# todo → in progress, while blocked:
+$ btid promote task/alpha-n7qk
+refused: alpha-n7qk is blocked: waiting on the schema review. (TASK_BLOCKED)
+
+# in progress → done, with the checklist open:
+$ btid promote task/alpha-n7qk
+refused: alpha-n7qk has 2 of 5 steps open. (STEPS_OPEN)
+
+# done → anywhere forward:
+$ btid promote task/alpha-n7qk
+refused: alpha-n7qk is already done. (ALREADY_DONE)
+```
+
+**Backwards is `demote`, one step per call**, and it takes no attribute either — a reason to reopen something is a comment,
+where a reader looks for it:
+
+```console
+$ btid demote task/alpha-n7qk
+demoted  alpha-n7qk   in_progress   rev 10
+```
+
+A demotion keeps `percentComplete` — the work really did get that far — and a demotion to `backlog` makes the stage
+`demoted`. At the bottom, `demote` refuses with `ALREADY_BACKLOG`.
+
+**`edit` cannot move the ladder at all.** A patch carrying `status` is refused with `STATUS_IS_A_STEP`, which is what makes
+the gates above binding rather than advisory.
+
 
 ## 5. Work — the ordinary edits, the labels, and the checklist
 
@@ -178,7 +198,7 @@ the CLI — the store's commits are the undo. Ticking a step that is already don
 ### The ordinary edits, and the one rule that bites
 
 ```console
-$ btid edit task/alpha-n7qk --status in_progress
+$ btid promote task/alpha-n7qk
 edited  alpha-n7qk   rev 4
 
 $ btid edit task/alpha-n7qk --percent 40
@@ -223,11 +243,12 @@ The exception is a comment — any member may add one to any task.
 ## 6. Finish
 
 ```console
-$ btid edit task/alpha-n7qk --status done --percent 100
-edited  alpha-n7qk   rev 9
+$ btid promote task/alpha-n7qk            # the last step; it sets percentComplete to 100
+promoted  alpha-n7qk   done   rev 9
 ```
 
-Nothing completes by itself: `percentComplete` is a number a person sets, and steps are ticked, not inferred. A `done` task
+Finishing is a step, not a field: `promote` refuses while a step is open, and sets `percentComplete` to 100 when the last
+one is ticked. Progress short of done is still a number a person sets — nothing is inferred from it.
 stays on the board and in every count until it is archived or deleted.
 
 ---
@@ -262,14 +283,14 @@ btid new task/alpha-n7qk/step --name "Draft the 1440 measurement"   # → st-c3d
 btid done task/alpha-n7qk/step/st-a1b2
 btid undo task/alpha-n7qk/step/st-a1b2        # and back, so the pair is visible
 btid remove task/alpha-n7qk/step/st-c3d4      # the draft was superseded
-btid edit task/alpha-n7qk --status in_progress
+btid promote task/alpha-n7qk
 btid edit task/alpha-n7qk --percent 40
 btid edit task/alpha-n7qk --blocked on --blocked-reason "Waiting for the header spec"
 btid edit task/alpha-n7qk --blocked off --blocked-reason none
 btid edit task/alpha-n7qk --tracked on --end 2026-11-16 --note "The header spec slipped a week."
 
 # 6. finish
-btid edit task/alpha-n7qk --status done --percent 100
+btid promote task/alpha-n7qk                     # the last step: done, and percent 100
 ```
 
 Nineteen commands, nineteen commits. The two refusals in the text above are not in the list on purpose: they are what the rules
@@ -359,7 +380,7 @@ Run on the prepared store `chengyukpong/btid-cli-test@main`, as `chengyukpong`, 
 **Every refusal in this document happened, in the words it predicted:**
 
 ```
-$ btid edit task/alpha-qkka --status todo
+$ btid promote task/alpha-qkka
 refused: Promote the item to move it onto the board. (NOT_ALLOWED)
 
 $ btid promote task/alpha-qkka

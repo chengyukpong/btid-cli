@@ -11,7 +11,7 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — fifteen, no two-word ones
+## Verbs — sixteen, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
@@ -19,7 +19,8 @@ by position.
 | `show` | read one | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `cache` |
 | `new` | create — the store mints the id | `task` · `project` · `person` · `store` · `task/<id>/step` |
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
-| `promote` | the one crossing onto the board — names a row, takes no attributes | `task/<id>` |
+| `promote` | one step up the ladder: backlog → todo → in progress → done — takes no attributes | `task/<id>` |
+| `demote` | one step back down the ladder — takes no attributes | `task/<id>` |
 | `remove` | delete a row, or detach a label | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `task/<id>/label` |
 | `add` | attach what already exists (a label from the project's vocabulary) | `task/<id>/label` |
 | `rename` | rename a step | `task/<id>/step/<step-id>` |
@@ -33,10 +34,19 @@ The verb set is closed. Adding one is a decision about the grammar, not about a 
 grows a *path*, not a verb. `plan`, `whoami`, `version` and `help` are the four that name no path, because none of them is
 about a row: they are about a file, a session, or the binary.
 
-**`promote` takes no attributes.** It is the crossing and nothing else — one row, its gate, its moment — so
-`promote task/<id> --status done` is refused as a usage error rather than quietly doing what `edit --status done` does. The
-two are different acts and the grammar already says so: `edit` moves a row **within** the board, and the store refuses a row
-that crosses *onto* it by any other route. That is why the redundancy is gone rather than merely documented.
+**The ladder is written by verbs, and only by them.** `promote` walks `backlog → todo → in progress → done` one step per
+call; `demote` walks it back. Neither takes an attribute, so each step has one spelling and one gate:
+
+```
+btid promote task/alpha-n7qk      # backlog → todo        the six fields
+btid promote task/alpha-n7qk      # todo → in progress    not blocked
+btid promote task/alpha-n7qk      # in progress → done    every step ticked
+btid demote  task/alpha-n7qk      # done → in progress    no attribute, no note
+```
+
+`edit` **does not take `status`** — a patch that carries one is refused with a sentence naming the ladder, because otherwise
+the gates are advisory and any front end could walk the row up in one write. `percentComplete` is a fact and stays an edit;
+`done` sets it to 100, and a reopening leaves it where it was, since the work really did get that far.
 
 ## Paths — the store, as a tree
 
@@ -106,7 +116,7 @@ btid new task/alpha-n7qk/step --name "Measure the header at 1440"       # → st
 btid done task/alpha-n7qk/step/st-a1b2
 btid undo task/alpha-n7qk/step/st-a1b2
 btid remove task/alpha-n7qk/label ui
-btid edit task/alpha-n7qk --status done --percent 100
+btid promote task/alpha-n7qk                     # the last step: done, and percent 100
 btid remove task/alpha-n7qk --yes
 btid show task/alpha-n7qk
 btid ls task projectId=alpha status=todo
@@ -136,7 +146,7 @@ means. `$task` alone is refused — a result is not a value.
 | `btid ls task/<id>` | `usage: “task/<id>” is one row; use show` |
 | `btid edit task/alpha-n7qk bogus` | `usage: edit task/alpha-n7qk takes --title, --status, …` (its own flags) |
 | `btid done task/alpha-n7qk` | `usage: done applies to a step: done task/<id>/step/<step-id>` |
-| `btid promote task/alpha-n7qk --status done` | `usage: promote takes no attributes; edit task/<id> --status done` |
+| `btid promote task/alpha-n7qk --status done` | `usage: promote takes no attributes; btid promote twice moves it to in progress` |
 | `btid show store` | `usage: “store” has no show — btid whoami says who you are, btid new store creates one` |
 | a verb unknown at that path | the verbs valid **at that path**, not the whole registry |
 
@@ -150,6 +160,7 @@ Every refusal names what to type instead. A grammar nobody can guess is a gramma
 | `task ls status=todo` | `ls task status=todo` |
 | `task show <id>` / `task/<id>` | `show task/<id>` |
 | `task promote <id>` | `promote task/<id>` |
+| `task promote <id> --status s` | `promote task/<id>` until it reaches `s`; `edit --status` no longer moves the ladder |
 | `task remove <id> --yes` | `remove task/<id> --yes` |
 | `task label add <id> ui` | `add task/<id>/label ui` |
 | `task step new <id> --name x` | `new task/<id>/step --name x` |

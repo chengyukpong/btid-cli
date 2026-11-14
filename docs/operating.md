@@ -304,12 +304,12 @@ Two values the store decides, not the flag:
   booking, and day dates are refused by the schema;
 - a **tracked** task's end day needs `--note`, and that is asked before the schema is reached.
 
-**A captured item becomes board work by promotion, not by a status flag.** Editing `--status todo` on a backlog row is refused —
+A captured item becomes board work by promotion, and the ladder is walked by `promote` and `demote` only — `edit` cannot
   the rule is `NOT_ALLOWED` with *"Promote the item to move it onto the board."* — and the verb that does it is:
 
 ```console
 $ btid promote task/alpha-b9z9              # lands in todo, and takes no attributes
-$ btid edit task/alpha-b9z9 --status in_progress
+$ btid promote task/alpha-b9z9
 promoted  alpha-b9z9   todo          rev 1
 edited    alpha-b9z9   in progress   rev 2
 ```

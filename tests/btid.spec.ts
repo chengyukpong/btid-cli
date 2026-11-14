@@ -223,7 +223,6 @@ describe('btid', () => {
       '--start', '2026-11-10',
       '--end', '2026-11-20',
       '--priority', 'urgent',
-      '--status', 'in_progress',
       '--note', 'Everything at once.',
     ])
     assert.equal(code, 0, lines.text)
@@ -241,7 +240,6 @@ describe('btid', () => {
     assert.equal(row['startDate'], '2026-11-10')
     assert.equal(row['endDate'], '2026-11-20')
     assert.equal(row['priority'], 'urgent')
-    assert.equal(row['status'], 'in_progress')
   })
 
   it('books a short task in hours, which is the only shape the store accepts', async () => {
@@ -439,26 +437,37 @@ describe('btid', () => {
     assert.equal(client.messages.length, 0, 'nothing committed')
   })
 
-  it('refuses a promotion twice, and points at the status change instead', async () => {
-    client.put('projects/alpha/tasks.json', {
-      'alpha-a1b2': task(),
-      'alpha-b9z9': task({
-        id: 'alpha-b9z9',
-        taskId: 'alpha-b9z9',
-        title: 'Backlog item',
-        status: 'backlog',
-        firstPromotedAt: null,
-        estimateDays: 2,
-        definitionOfDone: 'It works.',
-      }),
+    it('walks the ladder with promote and demote, and refuses to do either twice', async () => {
+      client.put('projects/alpha/tasks.json', {
+        'alpha-a1b2': task(),
+        'alpha-b9z9': task({
+          id: 'alpha-b9z9',
+          taskId: 'alpha-b9z9',
+          title: 'Backlog item',
+          status: 'backlog',
+          firstPromotedAt: null,
+          estimateDays: 2,
+          definitionOfDone: 'It works.',
+        }),
+      })
+
+      // Up: backlog → todo → in progress, one step per call, one commit each.
+      assert.equal(await btid(['promote', 'task/alpha-b9z9']), 0)
+      assert.equal(client.json('projects/alpha/tasks.json')['alpha-b9z9']!['status'], 'todo')
+      assert.equal(await btid(['promote', 'task/alpha-b9z9']), 0)
+      assert.equal(client.json('projects/alpha/tasks.json')['alpha-b9z9']!['status'], 'in_progress')
+
+      // Down: one step, and percentComplete is not rewritten on the way.
+      assert.equal(await btid(['demote', 'task/alpha-b9z9']), 0)
+      assert.equal(client.json('projects/alpha/tasks.json')['alpha-b9z9']!['status'], 'todo')
+
+      // The bottom refuses, and says which end it is.
+      assert.equal(await btid(['demote', 'task/alpha-b9z9']), 0)
+      lines.written.length = 0
+      const atBottom = await btid(['demote', 'task/alpha-b9z9', '--json'])
+      assert.equal(atBottom, 1)
+      assert.equal((lines.json[0] as { error: { code: string } }).error.code, 'ALREADY_BACKLOG')
     })
-    assert.equal(await btid(['promote', 'task/alpha-b9z9']), 0)
-    lines.written.length = 0
-    const again = await btid(['promote', 'task/alpha-b9z9', '--json'])
-    assert.equal(again, 1)
-    const error = (lines.json[0] as { error: { code: string } }).error
-    assert.equal(error.code, 'ALREADY_PROMOTED')
-  })
 
   it('shows a project and a person, by id and by handle', async () => {
     assert.equal(await btid(['show', 'project/alpha']), 0, lines.text)
@@ -712,7 +721,7 @@ describe('btid', () => {
   it('a wrong verb at a known path answers with the verbs valid there', async () => {
     const code = await btid(['clear', 'task/alpha-a1b2'])
     assert.equal(code, 2)
-    assert.match(lines.text, /“task\/<id>” does not take “clear”\. It takes show, edit, promote, remove\./)
+      assert.match(lines.text, /does not take .clear.\. It takes show, edit, promote, demote, remove\./)
   })
 
   it('refuses attributes on promote, naming the verb that takes them', async () => {
@@ -734,7 +743,8 @@ describe('btid', () => {
     assert.equal(edit.writes, true)
     assert.ok(edit.flags.length > 0)
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
-    assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'remove'])
+      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'remove'])
+      assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
     assert.equal(manifest.paths.length, 11, 'the path tree is indexed once')
   })
 
