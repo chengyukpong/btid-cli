@@ -738,6 +738,62 @@ const taskComment: Verb = {
   },
 }
 
+const projectMemberAdd: Verb = {
+  name: 'add project/<id>/member',
+  summary: 'Open a project to somebody on the roster.',
+  usage: 'btid add project/<id>/member <person-id> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const member = context.args.slice(1).join(' ').trim()
+    if (id === undefined || member === '') return usage('btid add project/<id>/member <person-id>', context.out, context.json)
+
+    const before = context.store.project(id).row
+    const result = context.store.project(id).addMember(member)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.updatedAt === result.value.updatedAt
+    const committed = await commit(context, `member ${id} ${member}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.id}   ${member}`)
+    else context.out.line(`member  ${result.value.id}   ${member}   ${result.value.members.join(', ') || 'nobody'}`)
+    return 0
+  },
+}
+
+const projectMemberRemove: Verb = {
+  name: 'remove project/<id>/member',
+  summary: 'Close a project to somebody. Their work stays assigned.',
+  usage: 'btid remove project/<id>/member <person-id> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const member = context.args.slice(1).join(' ').trim()
+    if (id === undefined || member === '') {
+      return usage('btid remove project/<id>/member <person-id>', context.out, context.json)
+    }
+
+    const before = context.store.project(id).row
+    const result = context.store.project(id).removeMember(member)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const unchanged = before !== undefined && before.updatedAt === result.value.updatedAt
+    const committed = await commit(context, `unmember ${id} ${member}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else if (unchanged) context.out.line(`unchanged  ${result.value.id}   ${member}`)
+    else context.out.line(`unmember  ${result.value.id}   ${member}   ${result.value.members.join(', ') || 'nobody'}`)
+    return 0
+  },
+}
+
 const projectArchive: Verb = {
   name: 'archive project/<id>',
   summary: 'Tag the store, then delete the project and its work. There is no unarchive.',
@@ -1440,6 +1496,8 @@ export const HANDLERS = {
   projectNew,
   projectEdit,
   projectArchive,
+  projectMemberAdd,
+  projectMemberRemove,
   projectRemove,
   personLs,
   personShow,

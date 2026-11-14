@@ -223,6 +223,37 @@ describe('btid', () => {
       assert.equal(client.messages.length, 0, 'a usage error writes nothing')
     })
 
+    it('adds and removes a project member one at a time, like a label', async () => {
+      client.put('people.json', {
+        chengyukpong: managerRow,
+        ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
+        gary: { ...managerRow, id: 'gary', displayName: 'Gary', githubHandle: 'gary', role: 'member' },
+      })
+
+      assert.equal(await btid(['add', 'project/alpha/member', 'gary']), 0, lines.text)
+      assert.match(lines.text, /member {2}alpha {3}gary/)
+      assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['members'], ['gary'])
+      assert.equal(client.messages.at(-1), 'member alpha gary')
+
+      // Adding the same name again is unchanged, not a second commit.
+      const before = client.messages.length
+      lines.written.length = 0
+      assert.equal(await btid(['add', 'project/alpha/member', 'gary']), 0)
+      assert.match(lines.text, /unchanged {2}alpha {3}gary/)
+      assert.equal(client.messages.length, before, 'nothing to write, so no commit')
+
+      lines.written.length = 0
+      assert.equal(await btid(['remove', 'project/alpha/member', 'gary']), 0, lines.text)
+      assert.match(lines.text, /unmember {2}alpha {3}gary {3}nobody/)
+      assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['members'], [])
+    })
+
+    it('refuses a member who is not on the roster, by the path’s own rule', async () => {
+      const code = await btid(['add', 'project/alpha/member', 'ghost'])
+      assert.equal(code, 1)
+      assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
+    })
+
     it('takes the three statuses a project actually has', async () => {
       for (const status of ['active', 'paused', 'done']) {
         const code = await btid(['edit', 'project/alpha', '--status', status])
@@ -845,7 +876,7 @@ describe('btid', () => {
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
       assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'remove'])
       assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
-    assert.equal(manifest.paths.length, 11, 'the path tree is indexed once')
+      assert.equal(manifest.paths.length, 12, 'the path tree is indexed once')
   })
 
   it('says which btid it is, and which schema it speaks', async () => {

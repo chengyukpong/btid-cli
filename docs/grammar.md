@@ -74,6 +74,7 @@ task/<id>/step                           that task's checklist
 task/<id>/step/<step-id>                 one step
 task/<id>/label                          the labels on that task
 project                                  · project/<id>
+project/<id>/member                       who a project is open to — `add` and `remove`, one name at a time
 person                                   · person/<id>
 store                                    the store itself: `new store` is the only verb that takes it
 cache                                    the snapshot cache
