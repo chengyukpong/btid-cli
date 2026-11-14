@@ -95,7 +95,7 @@ $ node /path/to/btid-cli/dist/bin.js help
 ```console
 $ export BTID_STORE=yuk-org/btid-store@main      # owner/repo[@branch] — there is no default on purpose
 $ export BTID_TOKEN=$(gh auth token)             # or leave it out and let the CLI use the gh session
-$ btid store whoami
+$ btid whoami
 store    yuk-org/btid-store@main (env)
 handle   chengyukpong
 role     manager

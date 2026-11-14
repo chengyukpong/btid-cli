@@ -11,25 +11,32 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — fourteen, no two-word ones
+## Verbs — fifteen, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
 | `ls` | list | `task` · `project` · `person` · `task/<id>/step` · `task/<id>/label` |
-| `show` | read one | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `store` · `cache` |
+| `show` | read one | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `cache` |
 | `new` | create — the store mints the id | `task` · `project` · `person` · `store` · `task/<id>/step` |
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
-| `promote` | the one crossing onto the board | `task/<id>` |
-| `remove` | delete a row, or detach a label | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `task/<id>/label/<name>` |
+| `promote` | the one crossing onto the board — names a row, takes no attributes | `task/<id>` |
+| `remove` | delete a row, or detach a label | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `task/<id>/label` |
 | `add` | attach what already exists (a label from the project's vocabulary) | `task/<id>/label` |
 | `rename` | rename a step | `task/<id>/step/<step-id>` |
 | `done` · `undo` | tick / untick a step | `task/<id>/step/<step-id>` |
 | `clear` | drop every snapshot | `cache` |
 | `plan` | run a file of commands | *(a file, not a path)* |
+| `whoami` | who you are, and where you are pointing | — |
 | `version` · `help` | about the binary | — |
 
 The verb set is closed. Adding one is a decision about the grammar, not about a resource — which is the whole point: a resource
-grows a *path*, not a verb.
+grows a *path*, not a verb. `plan`, `whoami`, `version` and `help` are the four that name no path, because none of them is
+about a row: they are about a file, a session, or the binary.
+
+**`promote` takes no attributes.** It is the crossing and nothing else — one row, its gate, its moment — so
+`promote task/<id> --status done` is refused as a usage error rather than quietly doing what `edit --status done` does. The
+two are different acts and the grammar already says so: `edit` moves a row **within** the board, and the store refuses a row
+that crosses *onto* it by any other route. That is why the redundancy is gone rather than merely documented.
 
 ## Paths — the store, as a tree
 
@@ -39,15 +46,18 @@ task/<id>                                one task
 task/<id>/step                           that task's checklist
 task/<id>/step/<step-id>                 one step
 task/<id>/label                          the labels on that task
-task/<id>/label/<name>                   one of them (only where a name is an id, see below)
 project                                  · project/<id>
 person                                   · person/<id>
-store                                    the store itself
+store                                    the store itself: `new store` is the only verb that takes it
 cache                                    the snapshot cache
 ```
 
 Segment names are nouns, never verbs. A path segment that is an id is either minted by the store (`alpha-n7qk`, `st-a1b2`) or,
 for a project key, validated against the same rule it always was (`PROJECT_KEY_INVALID`).
+
+There is no `task/<id>/label/<name>`. A label **is** its text, and text may contain spaces or `/`, so a label name is data on
+every verb that touches one (`add task/<id>/label ui`, `remove task/<id>/label ui`) and never a path segment. The path stops at
+the collection.
 
 ## Data is named
 
@@ -64,11 +74,21 @@ $ btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."
 `ls` is the exception the terminal already had: its terms are the core's query grammar, and they are positional by design
 (`status=todo`, not `--status=todo`), because the core parses them.
 
-## Labels are the one path segment that is text
+## Labels are data, never a segment
 
 `add task/<id>/label ui` and `remove task/<id>/label ui` take the name as **data**, because a label *is* its text and text may
-contain spaces or `/`. So `task/<id>/label/<name>` appears in the `remove` row above only as the conceptual shape; the CLI
-accepts the name as an argument on every label verb, never as a path segment.
+contain spaces or `/`. The path stops at the collection — `task/<id>/label` — and the name is an argument on every label verb.
+A grammar that made the name a segment would need an escaping rule for `/`, and a store that permits `ui/web` as a label should
+not have to explain itself.
+
+## Help is one long page, not a lookup
+
+`btid help` prints the whole table — every verb with the paths it takes, and every path with the verbs valid on it — because
+reading it should cost one command, not a question per combination. `btid help <verb>` adds that verb's flags and one example.
+
+There is deliberately no `btid help <path>`. A path is data, and a help command that took a path would make the one command you
+run when you are lost depend on typing the thing you are lost about. The **refusals** carry the path's verbs instead: a wrong
+verb at a known path answers with the verbs valid there, which is the moment you actually need it.
 
 ## The life of a task, in this grammar
 
@@ -112,6 +132,8 @@ means. `$task` alone is refused — a result is not a value.
 | `btid ls task/<id>` | `usage: “task/<id>” is one row; use show` |
 | `btid edit task/alpha-n7qk bogus` | `usage: edit task/alpha-n7qk takes --title, --status, …` (its own flags) |
 | `btid done task/alpha-n7qk` | `usage: done applies to a step: done task/<id>/step/<step-id>` |
+| `btid promote task/alpha-n7qk --status done` | `usage: promote takes no attributes; edit task/<id> --status done` |
+| `btid show store` | `usage: “store” has no show — btid whoami says who you are, btid new store creates one` |
 | a verb unknown at that path | the verbs valid **at that path**, not the whole registry |
 
 Every refusal names what to type instead. A grammar nobody can guess is a grammar that has to teach, and this is where it does.
@@ -128,7 +150,7 @@ Every refusal names what to type instead. A grammar nobody can guess is a gramma
 | `task label add <id> ui` | `add task/<id>/label ui` |
 | `task step new <id> --name x` | `new task/<id>/step --name x` |
 | `task step done <id> <st-id>` | `done task/<id>/step/<st-id>` |
-| `store init` / `store whoami` | `new store` / `show store` |
+| `store init` / `store whoami` | `new store` / `whoami` |
 | `cache show` / `cache clear` | `show cache` / `clear cache` |
 
 - **Breaking.** 0.12.0, hard cut: the old spellings are refused with a message naming the new one, not silently accepted.

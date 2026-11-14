@@ -55,3 +55,21 @@ Written down because it was abandoned deliberately, not for lack of a plan:
    `VERBS`.
 4. **Migration order:** tests first, then the table. The table's rules were discovered by watching tests fail, which cost a round
    trip; four target-grammar tests written up front would have pinned them.
+
+## Three decisions taken while reviewing the grammar (2026-11-14T22:40)
+
+1. **`promote` takes no attributes.** It is the crossing and nothing else, so `--status` is a usage error there; `edit task/<id>
+   --status` moves a row within the board and the store refuses a crossing by any other route. Two spellings of one act was the
+   redundancy this rebuild exists to remove.
+2. **Help is one long page.** `btid help` prints the whole verb × path table and `btid help <verb>` adds that verb's flags and an
+   example. There is deliberately **no `btid help <path>`**: a path is data, and the command you run when you are lost must not
+   require typing the thing you are lost about. The refusals carry the path's verbs instead, which is where the need actually
+   arises.
+3. **`whoami` stays a verb of its own.** `show store` was a worse word for the same page: `show` reads a row and a store is not a
+   row. `new store` remains the one verb that takes the `store` path, and `show store` is refused with both alternatives named.
+
+So the verb table is fifteen, and exactly four of them name no path — `plan`, `whoami`, `version`, `help` — because none is about
+a row.
+
+Also fixed in the same sitting: the doc contradicted itself on labels — the `remove` row listed `task/<id>/label/<name>` while the
+path tree said a label name is never a segment. There is no such path; the collection stops at `task/<id>/label`.
