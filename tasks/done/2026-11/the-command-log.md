@@ -1,9 +1,9 @@
 # The CLI's log sink
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-15T19:26:00+08:00
 - **Finished:** 2026-11-15T19:37:00+08:00
-- **Approved:** —
+- **Approved:** 2026-11-15T21:54:00+08:00
 
 ## Description
 
