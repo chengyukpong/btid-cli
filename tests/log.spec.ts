@@ -104,12 +104,18 @@ describe('the CLI log', () => {
     )
   })
 
-  it('writes nothing anywhere unless asked', async () => {
-    const { code, stdout, stderr } = await dispatch(['ls', 'task'])
-    assert.equal(code, 0)
-    assert.match(stdout.text, /alpha-a1b2/)
-    assert.equal(stderr.text, '')
-    assert.equal(existsSync(join(workspace, 'btid.log')), false, 'no file unless asked for')
+  it('logs by default, and --no-log is the way out', async () => {
+    const verboseOff = await dispatch(['ls', 'task'])
+    assert.equal(verboseOff.code, 0)
+    assert.match(verboseOff.stdout.text, /alpha-a1b2/)
+    assert.equal(verboseOff.stderr.text, '', 'the file sink is silent when it works')
+    assert.equal(existsSync(join(workspace, 'btid.log')), true, 'a command that runs is a command worth a line')
+
+    // The switch that turns it off, per command or per session.
+    const off = mkdtempSync(join(tmpdir(), 'btid-cli-off-'))
+    const quiet = await dispatch(['ls', 'task', '--no-log'], { cacheDir: off })
+    assert.equal(quiet.code, 0)
+    assert.equal(existsSync(join(off, 'btid.log')), false)
   })
 
   it('--verbose puts the entries on stderr and leaves stdout exactly as it was', async () => {

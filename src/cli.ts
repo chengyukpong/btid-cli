@@ -200,28 +200,31 @@ export async function run(options: RunOptions): Promise<number> {
 
   // --- the log: built here, because it must exist before the store does -----------------------------------------
   //
-  // Two sinks, both opt-in: `--verbose` to stderr (so a piped `--json` keeps its pipe), `--log-file [path]` to a file. With no
-  // path the name is `btid.log` in the cache directory, rotated to `btid-{yyyyMMdd}.log` each day.
+  // **On by default**, to `btid.log` in the cache directory, rotated to `btid-{yyyyMMdd}.log` each day. It was opt-in for an
+  // afternoon, and the honest verdict is that opt-in failed: three times in a row the answer to "where is the log" was "you
+  // did not ask for one", which is a design that puts the cost of my curiosity on the person debugging. A command that runs is
+  // a command worth a line.
   //
-  // The same two things are settable from the environment, because the flag is easy to forget and a person debugging wants to
-  // switch logging on for a session, not for a command: `BTID_VERBOSE=1`, `BTID_LOG_FILE=1` (the default file) or a path. A flag
-  // beats the environment when both are given, since it is the more specific instruction.
+  // `--no-log` (or `BTID_LOG=0`) turns it off; `--log-file <path>` and `BTID_LOG_FILE=<path>` move it; `--verbose` copies each
+  // entry to stderr as well, so a piped `--json` consumer keeps its pipe and a person can watch the work happen.
   const stderr = options.stderr ?? ((text: string) => process.stderr.write(text))
-  const on = (value: string | undefined): boolean =>
-    value !== undefined && !['', '0', 'false', 'off', 'no'].includes(value.trim().toLowerCase())
-  const verbose = flags['verbose'] === true || on(env['BTID_VERBOSE'])
+  const truthy = (value: string | undefined): boolean =>
+    value !== undefined && ['1', 'true', 'on', 'yes'].includes(value.trim().toLowerCase())
+  const falsy = (value: string | undefined): boolean =>
+    value !== undefined && ['0', 'false', 'off', 'no'].includes(value.trim().toLowerCase())
+  const verbose = flags['verbose'] === true || truthy(env['BTID_VERBOSE'])
   const logFlag = flags['log-file']
   const logEnv = env['BTID_LOG_FILE']
-  const logPath =
-    logFlag === true
-      ? defaultLogPath(options.cacheDir ?? cacheRoot())
-      : typeof logFlag === 'string'
-        ? logFlag
-        : on(logEnv) && !['1', 'true', 'on', 'yes'].includes((logEnv ?? '').trim().toLowerCase())
-          ? (logEnv ?? '').trim()
-          : on(logEnv)
-            ? defaultLogPath(options.cacheDir ?? cacheRoot())
-            : null
+  const off = flags['no-log'] === true || falsy(env['BTID_LOG']) || falsy(logEnv)
+  const logPath = off
+    ? null
+    : typeof logFlag === 'string'
+      ? logFlag
+      : logFlag === true
+        ? defaultLogPath(options.cacheDir ?? cacheRoot())
+        : logEnv !== undefined && logEnv.trim() !== '' && !truthy(logEnv)
+          ? logEnv.trim()
+          : defaultLogPath(options.cacheDir ?? cacheRoot())
   const sinks = [verbose ? stderrSink(stderr) : null, logPath === null ? null : fileSink(logPath, stderr)].filter(
     (sink): sink is LogSink => sink !== null,
   )
@@ -282,7 +285,7 @@ async function dispatch(
 
   // A flag the verb does not declare is a mistake, not something to ignore: silently dropping it is how a typo becomes
   // "needs at least one field to change", which is the wrong sentence for the wrong problem.
-  const global = new Set(['store', 'json', 'help', 'v', 'version', 'fresh', 'verbose', 'log-file'])
+  const global = new Set(['store', 'json', 'help', 'v', 'version', 'fresh', 'verbose', 'log-file', 'no-log'])
   const declared = new Set([...Object.keys(handler.flags ?? {}), ...global])
   const unknownFlags = Object.keys(flags).filter((flag) => !declared.has(flag))
   if (unknownFlags.length > 0) {

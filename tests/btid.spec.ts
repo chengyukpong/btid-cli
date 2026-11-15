@@ -926,7 +926,8 @@ describe('btid', () => {
         btid: CLI_VERSION,
         coreSchema: EXPECT,
         manifest: 2,
-        log: { enabled: false, path: null },
+        // Logging is on by default, so the command reports the file it wrote — a workspace of the test's own.
+        log: { enabled: true, path: join(workspace, 'btid.log') },
       })
   })
 
@@ -987,7 +988,9 @@ describe('btid', () => {
     const call = (argv: string[]) =>
       run({
         argv: ['--store', 'chengyukpong/btid-data', ...argv],
-        env: { BTID_TOKEN: 'test-token' },
+        // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
+      // workspace: the one spec that is *about* logging turns it back on.
+      env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
         out: consoleOutput((text) => lines.write(text)),
         clientFor: () => client,
         tokenFor: () => 'test-token',
@@ -1022,7 +1025,9 @@ describe('btid', () => {
     let asked = 0
     const code = await run({
       argv: ['--store', 'chengyukpong/btid-data', 'whoami'],
-      env: { BTID_TOKEN: 'test-token' },
+      // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
+      // workspace: the one spec that is *about* logging turns it back on.
+      env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
       out: consoleOutput((text) => lines.write(text)),
       clientFor: () => client,
       tokenFor: () => 'test-token',
@@ -1062,7 +1067,9 @@ describe('btid', () => {
     lines.written.length = 0
     const code = await run({
       argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task'],
-      env: { BTID_TOKEN: 'test-token' },
+      // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
+      // workspace: the one spec that is *about* logging turns it back on.
+      env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
       out: consoleOutput((text) => lines.write(text)),
       clientFor: () => {
         calls.push('client')
@@ -1116,7 +1123,9 @@ describe('btid', () => {
     lines.written.length = 0
     const code = await run({
       argv: ['--store', 'chengyukpong/btid-data', 'new', 'task', '--project', 'alpha', '--title', 'Two'],
-      env: { BTID_TOKEN: 'test-token' },
+      // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
+      // workspace: the one spec that is *about* logging turns it back on.
+      env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
       out: consoleOutput((text) => lines.write(text)),
       clientFor: () => counting as unknown as FakeClient,
       tokenFor: () => 'test-token',
