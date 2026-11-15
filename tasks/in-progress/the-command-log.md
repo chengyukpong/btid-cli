@@ -14,10 +14,26 @@ answer to "why did that command take four seconds" is still a `Measure-Command` 
 Two sinks, both opt-in, both plain functions:
 
 - **`--verbose`** writes each entry to **stderr**, so a piped `--json` consumer keeps its pipe clean.
-- **`--log-file [path]`** appends to a file. **With no path, the name defaults to `btid-{yyyyMMdd}.log` in the cache
-  directory** (`BTID_CACHE_DIR`, else `%LOCALAPPDATA%\btid\cache`, else `~/.cache/btid`), so a day's commands are one file and
-  a support request is one attachment.
+- **`--log-file [path]`** appends to a file. **With no path, the name is `btid.log` in the cache directory**
+  (`BTID_CACHE_DIR`, else `%LOCALAPPDATA%\btid\cache`, else `~/.cache/btid`).
 - Both together write the same entry to both, in the order given.
+
+## Rotation, changed at the user's request (2026-11-15T19:40)
+
+The first version named the file `btid-{yyyyMMdd}.log` and started a new one each day. The user asked for the simpler shape: **one
+live file, `btid.log`, and a dated archive.** Before the day's first line is written, a `btid.log` whose own creation date is not
+today is renamed to `btid-{thatDate}.log`, and today starts a fresh `btid.log`.
+
+- **The date comes from the file's own header** (`# created 20261114`), which survives a copy, a restore or a sync — not from
+  `stat`, which a copy rewrites. A file with no header (one written by 0.19.0) falls back to its birth time, then its modification
+  time, and is left alone if that is today.
+- **A byte-order mark is stripped before parsing.** Found the hard way: a `btid.log` written by PowerShell carries one, `^` does
+  not match through it, and the file rotated under *today's* date instead of its own.
+- **An archive is never overwritten.** A second rotation for the same day goes to `btid-20261114-2.log`.
+- **A file that cannot be renamed is not a failure.** On Windows an open file cannot be renamed; the rotation is skipped with one
+  warning and the lines keep going into the file it could not move. Losing a rotation is cheaper than losing the log.
+- No size ceiling, no count to keep, no compression: a log that needs a policy is a log nobody reads, and the shell can rotate a
+  directory of dated files any way its owner likes.
 
 ## The line
 
@@ -63,3 +79,17 @@ $ btid ls task                           # nothing on stderr, no file
 Six tests (`tests/log.spec.ts`), 90 in the project. The engine's chatter is filtered to the two lines worth an entry — what a
 commit carried, and that there was nothing to carry — because `5 file(s) match no class template` followed by one line per path is
 how a log stops being readable.
+
+## What rotation measures (2026-11-15T19:43)
+
+```
+$ echo "# created 20261114 ..." > ~/.cache/btid/btid.log     # a file from yesterday
+$ btid ls task --log-file
+$ ls ~/.cache/btid
+  btid.log            # fresh, "# created 20261115", today's entries
+  btid-20261114.log   # yesterday's 66 bytes, untouched
+```
+
+Five tests in `tests/rotation.spec.ts`, eleven in the log area, 95 in the project: a stale file is archived under its own day;
+a file created today is appended to, with one header; a name clash becomes `-2`; a headerless file is judged by its dates and
+keeps its lines; and a sink that cannot write warns once and goes quiet.

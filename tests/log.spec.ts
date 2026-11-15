@@ -7,7 +7,7 @@ import { beforeEach, describe, it } from 'vitest'
 import { EXPECT } from 'btid-core'
 import { run } from '../src/cli'
 import { consoleOutput } from '../src/output'
-import { defaultLogPath, HEADER } from '../src/log'
+import { dayKey, defaultLogPath, headerFor } from '../src/log'
 import { FakeClient, Lines } from './support'
 
 // The CLI's log, end to end: the flags choose sinks, the core supplies the entries, and stdout is never touched by either.
@@ -109,7 +109,7 @@ describe('the CLI log', () => {
     assert.equal(code, 0)
     assert.match(stdout.text, /alpha-a1b2/)
     assert.equal(stderr.text, '')
-    assert.equal(existsSync(join(workspace, 'btid-2026.log')), false, 'no file, and no idea what its name would be')
+    assert.equal(existsSync(join(workspace, 'btid.log')), false, 'no file unless asked for')
   })
 
   it('--verbose puts the entries on stderr and leaves stdout exactly as it was', async () => {
@@ -126,17 +126,17 @@ describe('the CLI log', () => {
     assert.equal(line.split('\t').length, 7)
   })
 
-  it('--log-file with no path writes btid-{yyyyMMdd}.log in the cache directory, with a header', async () => {
+  it('--log-file with no path writes btid.log in the cache directory, with a dated header', async () => {
     const { code, stderr } = await dispatch(['ls', 'task', '--log-file'])
     assert.equal(code, 0)
     assert.equal(stderr.text, '', 'the file sink is silent when it works')
 
     const path = defaultLogPath(workspace)
-    assert.match(path, /btid-\d{8}\.log$/)
+    assert.match(path, /btid\.log$/)
     assert.equal(existsSync(path), true)
 
     const written = readFileSync(path, 'utf8').trimEnd().split('\n')
-    assert.equal(written[0], HEADER)
+    assert.match(written[0] ?? '', /^# created \d{8}/)
     assert.ok(written.some((line) => line.includes('\topenStore\t')))
     assert.ok(written.some((line) => line.includes('\tcommand\t')))
   })
@@ -148,8 +148,8 @@ describe('the CLI log', () => {
     assert.match(stderr.text, /openStore/)
     assert.equal(existsSync(target), true)
     const lines = readFileSync(target, 'utf8').trimEnd().split('\n')
-    assert.equal(lines[0], HEADER)
-    assert.ok(lines.length >= 3, 'a header, the open, and the command')
+    assert.match(lines[0] ?? '', /^# created \d{8}/)
+    assert.ok(lines.length >= 4, 'two header lines, the open, and the command')
   })
 
   it('keeps stdout parseable as JSON with --verbose on', async () => {

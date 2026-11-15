@@ -207,7 +207,7 @@ export async function run(options: RunOptions): Promise<number> {
   const logFlag = flags['log-file']
   const logPath =
     logFlag === true
-      ? defaultLogPath(options.cacheDir ?? cacheRoot(), new Date())
+      ? defaultLogPath(options.cacheDir ?? cacheRoot())
       : typeof logFlag === 'string'
         ? logFlag
         : null
