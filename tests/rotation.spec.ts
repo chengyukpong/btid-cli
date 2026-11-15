@@ -92,4 +92,15 @@ describe('the log rotator', () => {
     assert.equal(warned.length, 1, 'one warning, then silence')
     assert.match(warned[0] ?? '', /logging off/)
   })
+  it('writes one header per file, no matter how many commands share the day', () => {
+    const today = on(2026, 11, 15, 9)
+    fileSink(path, () => undefined, () => today)(entry('first command'))
+    fileSink(path, () => undefined, () => on(2026, 11, 15, 11))(entry('second command'))
+    fileSink(path, () => undefined, () => on(2026, 11, 15, 15))(entry('third command'))
+
+    const written = readFileSync(path, 'utf8')
+    assert.equal(written.match(/# created/g)?.length, 1, 'the header belongs to the file, not to the process')
+    assert.match(written, /first command[\s\S]*second command[\s\S]*third command/)
+  })
+
 })

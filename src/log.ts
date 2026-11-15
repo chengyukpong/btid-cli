@@ -112,7 +112,11 @@ export const fileSink = (path: string, warn: (text: string) => void, at: () => D
       if (!ready) {
         mkdirSync(dirname(path), { recursive: true })
         rotateIfStale(path, at(), warn)
-        appendFileSync(path, `${headerFor(at())}\n`)
+        // The header belongs to the **file**, not to the process: one per file, written when the file is new or empty. A header
+        // per invocation would put a "created" line in the middle of the day every time a command ran — which is exactly what the
+        // first version did, and why the log read as a series of files glued together.
+        const fresh = !existsSync(path) || statSync(path).size === 0
+        if (fresh) appendFileSync(path, `${headerFor(at())}\n`)
         ready = true
       }
       appendFileSync(path, `${formatEntry(entry)}\n`)
