@@ -109,3 +109,17 @@ setx BTID_LOG_FILE 1            :: once, for every window from now on
 
 A flag still wins over the environment, because an explicit path is the more specific instruction; the test asserts both the
 switch and the precedence. 96 tests.
+
+## System time, not UTC (2026-11-15T20:03)
+
+The first entries said `11:59:19.714Z` to somebody whose clock said `19:59` — correct, and useless for reading. `at` is now local
+ISO 8601 **with its offset**, so it is both comparable with a wall clock and unambiguous:
+
+```
+2026-11-15T20:03:49.181+08:00   chengyukpong   openStore   yuk-org/btid2-data3@main   ok   2ms   hydrated from the snapshot
+```
+
+Two things fixed while there: the stamp is the moment the call **started** (it was taken when the entry was emitted, which made
+the field's documentation a lie), and `localIso` lives in `btid-core` so the file, the header and the panel cannot format times
+differently. The file is still written in **completion** order, so the closing `command` entry — stamped with the earliest start —
+sits last; that is the one place the order and the stamps disagree, and it is a summary line by design.
