@@ -1524,7 +1524,7 @@ const version: Verb = {
     context.out.line(
       context.logTarget.enabled && context.logTarget.path !== null
         ? `log  ${context.logTarget.path}`
-        : 'log  off  (--log-file, or BTID_LOG_FILE=1)',
+        : 'log  off  (--no-log, or BTID_LOG=0)',
     )
     return 0
   },
