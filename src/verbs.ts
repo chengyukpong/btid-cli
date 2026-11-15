@@ -189,7 +189,15 @@ const taskShow: Verb = {
 
     context.result = row
     if (context.json) {
-      context.out.json({ ...row, steps: handle.steps, warnings: handle.warnings.map((warning) => warning.message) })
+      context.out.json({
+        ...row,
+        steps: handle.steps,
+        diagnostics: handle.diagnostics.map((finding) => ({
+          code: finding.code,
+          severity: finding.severity,
+          message: finding.message,
+        })),
+      })
       return 0
     }
 
@@ -205,7 +213,11 @@ const taskShow: Verb = {
       context.out.line(`  steps  ${progress.done}/${progress.total}`)
       for (const step of handle.steps) context.out.line(`    [${step.done ? 'x' : ' '}] ${step.id}  ${step.name}`)
     }
-    for (const warning of handle.warnings) context.out.line(`  warning ${warning.message}`)
+    // Two words, because the levels mean different things to a person reading a terminal: a warning holds a save, an info is a
+    // nudge they may accept.
+    for (const finding of handle.diagnostics) {
+      context.out.line(`  ${finding.severity === 'warning' ? 'warning' : 'info   '} ${finding.message}`)
+    }
 
     if (row.comments.length > 0) {
       context.out.line('')

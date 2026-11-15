@@ -1,4 +1,5 @@
 import { GithubClient, exitCodeFor } from 'githubdb'
+import { BlockedError } from 'btid-core'
 import type { Store, StoreBackend } from 'btid-core'
 import { initStore, localIso, openStore, exitCodeOf, StoreFaultError, isStoreFault, type LogSink } from 'btid-core'
 import { both, defaultLogPath, fileSink, stderrSink } from './log'
@@ -419,8 +420,29 @@ async function dispatch(
   }
 }
 
+/**
+ * A batch the rules will not let through, which is neither a fault nor a failed command.
+ *
+ * The row was accepted and the write was not: the store's second-level gate collected every warning in the batch and refused
+ * once. Each sentence names the row and the fix, so the terminal shows what a person would see in the bar — and the exit code
+ * is 1, the same as any other refusal from the core: a rule said no, and a script can branch on that the way it always has.
+ */
+function blocked(error: BlockedError, out: Output, json: boolean): number {
+  if (json) {
+    out.json({ error: { kind: 'refused', code: error.code, message: error.message, blockers: error.blockers } })
+    return 1
+  }
+  for (const blocker of error.blockers) {
+    out.line(`refused: ${blocker.message}  (${blocker.code})`)
+  }
+  return 1
+}
+
 /** A fault is not a refusal: its code maps to an exit number, and `--json` carries it as data. */
 function fault(error: unknown, out: Output, json: boolean): number {
+  // Checked first: a blocked batch is a rule saying no, and reporting it as an unexpected error would be the same mistake the
+  // SPA made when it called this "save failed".
+  if (error instanceof BlockedError) return blocked(error, out, json)
   if (isStoreFault(error)) {
     if (json) out.json({ error: { kind: 'fault', code: error.code, message: error.message } })
     else out.line(`error: ${error.message.split('\n')[0]}  (${error.code})`)

@@ -255,7 +255,9 @@ describe('btid', () => {
     })
 
     it('takes the three statuses a project actually has', async () => {
-      for (const status of ['active', 'paused', 'done']) {
+      // Starts away from the fixture's own status: writing a value the row already holds is not a change any more, and a batch
+      // with no change does not commit — so the first edit has to be a real one.
+      for (const status of ['paused', 'done', 'active']) {
         const code = await btid(['edit', 'project/alpha', '--status', status])
         assert.equal(code, 0, status + ': ' + lines.text)
         assert.equal(client.json('projects/alpha/project.json')['alpha']!['status'], status)
@@ -448,6 +450,16 @@ describe('btid', () => {
     assert.equal(code, 1, lines.text)
     assert.match(lines.text, /That person is not on the roster: ghost\. Add them with `person new` first\./)
     assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
+    assert.equal(client.messages.length, 0, 'nothing was written')
+  })
+
+  it('refuses the commit — not the edit — when a row cannot be written, and says which row and why', async () => {
+    // The member gate is a warning now: the edit lands, the batch is refused, and the sentence names the fix. That is the second
+    // level the SPA shows as a bar and the CLI shows as a refusal.
+    const code = await btid(['edit', 'task/alpha-a1b2', '--assignee', 'gary'])
+    assert.equal(code, 1, lines.text)
+    assert.match(lines.text, /refused: gary is not a member of Alpha One/)
+    assert.match(lines.text, /ASSIGNEE_NOT_MEMBER/)
     assert.equal(client.messages.length, 0, 'nothing was written')
   })
 

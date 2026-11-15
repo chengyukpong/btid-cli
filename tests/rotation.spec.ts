@@ -68,10 +68,11 @@ describe('the log rotator', () => {
   })
 
   it('judges a file with no created line by its own dates, and keeps its lines', () => {
-    // Written a moment ago, so its birth date is today: nothing to rotate, nothing lost.
+    // Written a moment ago, so its birth date is today: nothing to rotate, nothing lost. The sink's clock is the wall clock for
+    // the same reason — a fixed date here makes the file look like the future for as long as the test outlives that date.
     writeFileSync(path, '# at\ta\nfrom an older build\n')
 
-    fileSink(path, () => undefined, () => on(2026, 11, 15, 12))(entry('after'))
+    fileSink(path, () => undefined, () => new Date())(entry('after'))
 
     assert.equal(existsSync(join(dir, 'btid-20261115.log')), false)
     const written = readFileSync(path, 'utf8')
