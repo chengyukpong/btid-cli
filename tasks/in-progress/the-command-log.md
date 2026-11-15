@@ -2,7 +2,7 @@
 
 - **Status:** in-progress
 - **Created:** 2026-11-15T19:26:00+08:00
-- **Finished:** —
+- **Finished:** 2026-11-15T19:37:00+08:00
 - **Approved:** —
 
 ## Description
@@ -51,3 +51,15 @@ $ btid ls task                           # no stderr output, and no file written
 $ btid ls task --log-file                # ./<cache>/btid-20261115.log exists, header + entries
 $ btid ls task --log-file trace.txt      # trace.txt instead of the default name
 ```
+
+## What it measures (2026-11-15T19:37)
+
+```
+$ btid ls task --verbose 2>trace.txt     # trace: openStore ... ok 2339ms / command ls task 0 2587ms 1 load
+$ btid ls task --log-file                # %LOCALAPPDATA%\btid\cache\btid-20261115.log, header + the same entries
+$ btid ls task                           # nothing on stderr, no file
+```
+
+Six tests (`tests/log.spec.ts`), 90 in the project. The engine's chatter is filtered to the two lines worth an entry — what a
+commit carried, and that there was nothing to carry — because `5 file(s) match no class template` followed by one line per path is
+how a log stops being readable.
