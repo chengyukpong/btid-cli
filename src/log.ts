@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
-import type { LogEntry, LogSink } from 'btid-core'
+import { localIso, type LogEntry, type LogSink } from 'btid-core'
 
 /**
  * Where the CLI's log goes.
@@ -18,7 +18,7 @@ export const dayKey = (at: Date): string =>
 
 /** The file's first line: when it was created, and what the columns are. Rotation reads the date back from here. */
 export const headerFor = (at: Date): string =>
-  [`# created ${dayKey(at)} ${at.toISOString()}`, ['# at', 'actor', 'verb', 'subject', 'result', 'ms', 'detail'].join('\t')].join(
+  [`# created ${dayKey(at)} ${localIso(at)}`, ['# at', 'actor', 'verb', 'subject', 'result', 'ms', 'detail'].join('\t')].join(
     '\n',
   )
 

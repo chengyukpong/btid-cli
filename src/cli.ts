@@ -1,6 +1,6 @@
 import { GithubClient, exitCodeFor } from 'githubdb'
 import type { Store, StoreBackend } from 'btid-core'
-import { initStore, openStore, exitCodeOf, StoreFaultError, isStoreFault, type LogSink } from 'btid-core'
+import { initStore, localIso, openStore, exitCodeOf, StoreFaultError, isStoreFault, type LogSink } from 'btid-core'
 import { both, defaultLogPath, fileSink, stderrSink } from './log'
 import { resolveToken, whoAmI } from './auth'
 import { cachedLogin, configPath, readConfigFile, rememberLogin, resolveStore, type StoreLocation } from './config'
@@ -99,7 +99,7 @@ async function connect(
     // not a brief detail; a log that needs scrolling to find the command has stopped being a log.
     if (!/commit: |nothing to commit/.test(line)) return
     options.log?.({
-      at: new Date().toISOString(),
+      at: localIso(new Date()),
       actor: 'client',
       verb: 'engine',
       subject: label,
@@ -241,7 +241,7 @@ export async function run(options: RunOptions): Promise<number> {
   } finally {
     // One closing entry per command: the per-call entries say what the store did, not what the user asked for.
     log?.({
-      at: new Date(startedAt).toISOString(),
+      at: localIso(new Date(startedAt)),
       actor: 'cli',
       verb: 'command',
       subject: parsed.args.join(' '),
