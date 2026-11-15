@@ -93,3 +93,19 @@ $ ls ~/.cache/btid
 Five tests in `tests/rotation.spec.ts`, eleven in the log area, 95 in the project: a stale file is archived under its own day;
 a file created today is appended to, with one header; a name clash becomes `-2`; a headerless file is judged by its dates and
 keeps its lines; and a sink that cannot write warns once and goes quiet.
+
+## The flag was the friction (2026-11-15T19:59)
+
+Reported as "I ran `btid ls task` and saw no new log" — the honest answer is that the flag *is* the switch, and forgetting it is the
+design failing at the keyboard, not the user failing to read the docs. So the same two sinks can now be switched on for a shell
+session instead of a command:
+
+```console
+set BTID_LOG_FILE=1            :: every command in this window appends to btid.log
+set BTID_LOG_FILE=D:\trace.log  :: …to that file instead, rotated by the same rule
+set BTID_VERBOSE=1              :: …and to stderr, without touching the file
+setx BTID_LOG_FILE 1            :: once, for every window from now on
+```
+
+A flag still wins over the environment, because an explicit path is the more specific instruction; the test asserts both the
+switch and the precedence. 96 tests.

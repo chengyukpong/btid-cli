@@ -172,4 +172,37 @@ describe('the CLI log', () => {
     assert.match(stderr.text, /logging off/)
     assert.equal(stderr.text.trimEnd().split('\n').length, 1, 'one warning, not one per line')
   })
+  it('logging can be switched on for a session, not just for a command', async () => {
+    const quiet = await dispatch(['ls', 'task']);
+    assert.equal(quiet.stderr.text, '');
+
+    const withEnv = await run({
+      argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task'],
+      env: { BTID_TOKEN: 'test-token', BTID_LOG_FILE: '1' },
+      out: consoleOutput(() => undefined),
+      stderr: () => undefined,
+      configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+      tokenFor: () => 'test-token',
+      loginFor: async () => 'chengyukpong',
+      clientFor: () => client as never,
+    });
+    assert.equal(withEnv, 0);
+    assert.equal(existsSync(join(workspace, 'btid.log')), true, 'BTID_LOG_FILE=1 is the default file');
+    // A flag still wins: an explicit path is the more specific instruction.
+    const own = join(workspace, 'own.tsv');
+    await run({
+      argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task', '--log-file', own],
+      env: { BTID_TOKEN: 'test-token', BTID_LOG_FILE: 'ignored.tsv' },
+      out: consoleOutput(() => undefined),
+      stderr: () => undefined,
+      configPath: join(workspace, 'config.json'),
+      cacheDir: workspace,
+      tokenFor: () => 'test-token',
+      loginFor: async () => 'chengyukpong',
+      clientFor: () => client as never,
+    });
+    assert.equal(existsSync(own), true);
+    assert.equal(existsSync(join(workspace, 'ignored.tsv')), false);
+  })
 })

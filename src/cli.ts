@@ -201,16 +201,27 @@ export async function run(options: RunOptions): Promise<number> {
   // --- the log: built here, because it must exist before the store does -----------------------------------------
   //
   // Two sinks, both opt-in: `--verbose` to stderr (so a piped `--json` keeps its pipe), `--log-file [path]` to a file. With no
-  // path the name is `btid-{yyyyMMdd}.log` in the cache directory, so a day's commands are one file.
+  // path the name is `btid.log` in the cache directory, rotated to `btid-{yyyyMMdd}.log` each day.
+  //
+  // The same two things are settable from the environment, because the flag is easy to forget and a person debugging wants to
+  // switch logging on for a session, not for a command: `BTID_VERBOSE=1`, `BTID_LOG_FILE=1` (the default file) or a path. A flag
+  // beats the environment when both are given, since it is the more specific instruction.
   const stderr = options.stderr ?? ((text: string) => process.stderr.write(text))
-  const verbose = flags['verbose'] === true
+  const on = (value: string | undefined): boolean =>
+    value !== undefined && !['', '0', 'false', 'off', 'no'].includes(value.trim().toLowerCase())
+  const verbose = flags['verbose'] === true || on(env['BTID_VERBOSE'])
   const logFlag = flags['log-file']
+  const logEnv = env['BTID_LOG_FILE']
   const logPath =
     logFlag === true
       ? defaultLogPath(options.cacheDir ?? cacheRoot())
       : typeof logFlag === 'string'
         ? logFlag
-        : null
+        : on(logEnv) && !['1', 'true', 'on', 'yes'].includes((logEnv ?? '').trim().toLowerCase())
+          ? (logEnv ?? '').trim()
+          : on(logEnv)
+            ? defaultLogPath(options.cacheDir ?? cacheRoot())
+            : null
   const sinks = [verbose ? stderrSink(stderr) : null, logPath === null ? null : fileSink(logPath, stderr)].filter(
     (sink): sink is LogSink => sink !== null,
   )
