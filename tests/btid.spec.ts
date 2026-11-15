@@ -922,7 +922,12 @@ describe('btid', () => {
 
     lines.written.length = 0
     assert.equal(await btid(['version', '--json']), 0)
-    assert.deepEqual(lines.json[0], { btid: CLI_VERSION, coreSchema: EXPECT, manifest: 2 })
+      assert.deepEqual(lines.json[0], {
+        btid: CLI_VERSION,
+        coreSchema: EXPECT,
+        manifest: 2,
+        log: { enabled: false, path: null },
+      })
   })
 
   it('takes --version as the same question, and answers it without a store', async () => {

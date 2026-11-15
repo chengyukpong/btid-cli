@@ -1516,10 +1516,16 @@ const version: Verb = {
   async run(context) {
     const line = versionLine(EXPECT)
     if (context.json) {
-      context.out.json({ btid: CLI_VERSION, coreSchema: EXPECT, manifest: MANIFEST_VERSION })
+      context.out.json({ btid: CLI_VERSION, coreSchema: EXPECT, manifest: MANIFEST_VERSION, log: context.logTarget })
       return 0
     }
     context.out.line(line)
+    // Where the log is going, said out loud: "there is no log" and "the log is somewhere else" look identical otherwise.
+    context.out.line(
+      context.logTarget.enabled && context.logTarget.path !== null
+        ? `log  ${context.logTarget.path}`
+        : 'log  off  (--log-file, or BTID_LOG_FILE=1)',
+    )
     return 0
   },
 }

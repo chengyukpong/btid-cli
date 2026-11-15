@@ -27,6 +27,13 @@ export interface VerbContext {
    */
   details: boolean
   /**
+   * Where this command's log is going, if anywhere.
+   *
+   * Resolved by the dispatcher from the flag, the environment and the cache directory, because that resolution is the one thing
+   * a person debugging cannot see: "there is no log" and "the log is somewhere else" look identical from the outside.
+   */
+  logTarget: { enabled: boolean; path: string | null }
+  /**
    * The commit the verb made, set by its one `commit()` call.
    *
    * `null` when there was nothing to write (the engine says so), `undefined` when the verb did not write at all. The

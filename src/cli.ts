@@ -236,7 +236,7 @@ export async function run(options: RunOptions): Promise<number> {
 
   let code = 2
   try {
-    code = await dispatch(options, out, env, flags, parsed.args, log, loads)
+    code = await dispatch(options, out, env, flags, parsed.args, log, { enabled: log !== undefined, path: logPath }, loads)
     return code
   } finally {
     // One closing entry per command: the per-call entries say what the store did, not what the user asked for.
@@ -260,6 +260,7 @@ async function dispatch(
   flags: Record<string, string | boolean>,
   parsedArgs: readonly string[],
   log: LogSink | undefined,
+  logTarget: { enabled: boolean; path: string | null },
   loads: { count: number },
 ): Promise<number> {
   // `btid --version` is what a person types first; it is the `version` verb under another name.
@@ -310,6 +311,7 @@ async function dispatch(
     try {
       return await handler.run({
         store: undefined as never,
+        logTarget,
         location: { owner: '', repo: '', ref: '' },
         source: 'flag',
         cacheDir: options.cacheDir ?? cacheRoot(),
@@ -360,6 +362,7 @@ async function dispatch(
   try {
     const context: VerbContext = {
       store,
+      logTarget,
       location: resolved.store,
       source: resolved.from,
       cacheDir: options.cacheDir ?? cacheRoot(),
