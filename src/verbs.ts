@@ -758,6 +758,59 @@ const taskComment: Verb = {
   },
 }
 
+const taskExempt: Verb = {
+  name: 'exempt task/<id>',
+  summary: 'Accept a nudge on a task, permanently, so it stops being raised.',
+  usage: 'btid exempt task/<id> <CODE> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const code = context.args.slice(1).join(' ').trim()
+    if (id === undefined || code === '') return usage('btid exempt task/<id> <CODE>', context.out, context.json)
+
+    const result = context.store.task(id).exempt(code)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `exempt ${id} ${code}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else {
+      const entry = result.value.exemptions.find((one) => one.code === code)
+      context.out.line(
+        `exempted  ${result.value.taskId}   ${code}   ${entry === undefined ? '' : entry.by}   ${entry === undefined ? '' : entry.at.slice(0, 16)}`,
+      )
+    }
+    return 0
+  },
+}
+
+const taskUnexempt: Verb = {
+  name: 'unexempt task/<id>',
+  summary: 'Take an acceptance back, so the sentence is raised again.',
+  usage: 'btid unexempt task/<id> <CODE> [--json] [--dry-run]',
+  flags: { 'dry-run': 'boolean' },
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    const code = context.args.slice(1).join(' ').trim()
+    if (id === undefined || code === '') return usage('btid unexempt task/<id> <CODE>', context.out, context.json)
+
+    const result = context.store.task(id).unexempt(code)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    const committed = await commit(context, `unexempt ${id} ${code}`)
+    if (committed !== null && committed !== 0) return committed
+
+    context.result = result.value
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`unexempted  ${result.value.taskId}   ${code}`)
+    return 0
+  },
+}
+
 const projectMemberAdd: Verb = {
   name: 'add project/<id>/member',
   summary: 'Open a project to somebody on the roster.',
@@ -1560,6 +1613,8 @@ export const HANDLERS = {
   projectNew,
   projectEdit,
   projectArchive,
+  taskExempt,
+  taskUnexempt,
   projectMemberAdd,
   projectMemberRemove,
   projectRemove,

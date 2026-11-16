@@ -189,13 +189,15 @@ describe('btid', () => {
     assert.match(lines.text, /captured {2}beta-/)
   })
 
-  it('refuses a window that ends before it starts, with the core’s sentence', async () => {
+  it('takes a window that ends before it starts, and refuses the commit with the core’s sentence', async () => {
+    // The row is writable; the warning is what stops the write. That is the level the SPA shows as a bar and the CLI as a
+    // refused batch, and both print the same words.
     const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta', '--start', '2026-11-30', '--end', '2026-11-02'])
     assert.equal(code, 1)
-      assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
-      assert.match(lines.text, /cannot end \(2026-11-02\) before it starts/)
-      assert.equal(client.messages.length, 0)
-    })
+    assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
+    assert.match(lines.text, /A project cannot end before it starts\./)
+    assert.equal(client.messages.length, 0)
+  })
 
     it('gives a new project its members, so nobody needs a second commit', async () => {
       client.put('people.json', {
@@ -208,12 +210,13 @@ describe('btid', () => {
       assert.deepEqual(client.json('projects/gamma/project.json')['gamma']!['members'], ['ivan', 'gary'])
     })
 
-    it('refuses members who are not on the roster, with the core’s sentence', async () => {
+    it('takes members who are not on the roster, and refuses the commit', async () => {
       client.put('people.json', { chengyukpong: managerRow })
       const code = await btid(['new', 'project', '--key', 'gamma', '--name', 'Gamma', '--members', 'nobody'])
       assert.equal(code, 1)
       assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
-      assert.match(lines.text, /not on the roster: nobody/)
+      assert.match(lines.text, /not on the roster/)
+      assert.equal(client.messages.length, 0)
     })
 
     it('refuses a project status of archived, pointing at the verb that archives', async () => {
@@ -254,16 +257,22 @@ describe('btid', () => {
       assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
     })
 
-    it('takes the three statuses a project actually has', async () => {
+    it('takes the three statuses a project actually has, and refuses done while work is open', async () => {
       // Starts away from the fixture's own status: writing a value the row already holds is not a change any more, and a batch
       // with no change does not commit — so the first edit has to be a real one.
-      for (const status of ['paused', 'done', 'active']) {
+      for (const status of ['paused', 'active']) {
         const code = await btid(['edit', 'project/alpha', '--status', status])
         assert.equal(code, 0, status + ': ' + lines.text)
         assert.equal(client.json('projects/alpha/project.json')['alpha']!['status'], status)
         lines.written.length = 0
       }
-      assert.equal(client.messages.length, 3, 'one commit each')
+
+      // Done is a status like the others, but a project holding open work earns a warning, so the batch is refused.
+      const done = await btid(['edit', 'project/alpha', '--status', 'done'])
+      assert.equal(done, 1)
+      assert.match(lines.text, /PROJECT_DONE_WITH_OPEN_TASKS/)
+      assert.equal(client.json('projects/alpha/project.json')['alpha']!['status'], 'active', 'nothing was written')
+      assert.equal(client.messages.length, 2, 'one commit each for the two that landed')
     })
 
 
@@ -319,12 +328,13 @@ describe('btid', () => {
   })
 
   it('books a short task in hours, which is the only shape the store accepts', async () => {
+    // The estimate stays: a small task's promise is stored in days and shown in hours, so clearing it is a different rule
+    // (ESTIMATE_REQUIRED) and not part of the booking shape.
     const code = await btid([
       'edit', 'task/alpha-a1b2',
       '--small', 'on',
       '--start', '2026-11-10T09:00',
       '--end', '2026-11-10T13:00',
-      '--estimate', 'none',
       '--note', 'Booked in hours.',
     ])
     assert.equal(code, 0, lines.text)
@@ -405,12 +415,21 @@ describe('btid', () => {
     assert.equal(steps().length, 0)
   })
 
-  it('clears nullable fields with none', async () => {    const code = await btid(['edit', 'task/alpha-a1b2', '--estimate', 'none', '--labels', 'none', '--blocked-by', 'none'])
+  it('clears nullable fields with none', async () => {
+    const code = await btid(['edit', 'task/alpha-a1b2', '--labels', 'none', '--blocked-by', 'none'])
     assert.equal(code, 0, lines.text)
     const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
-    assert.equal(row['estimateDays'], null)
     assert.deepEqual(row['labels'], [])
     assert.deepEqual(row['blockedBy'], [])
+  })
+
+  it('refuses to clear the estimate off a row that has left the backlog', async () => {
+    // `none` still means none: the edit lands and the warning is what stops the write. Every row on the board carries an
+    // estimate — a small task's is stored in days and shown in hours — so this is not exempt for being small either.
+    const code = await btid(['edit', 'task/alpha-a1b2', '--estimate', 'none'])
+    assert.equal(code, 1, lines.text)
+    assert.match(lines.text, /ESTIMATE_REQUIRED/)
+    assert.match(lines.text, /needs an estimate/)
   })
 
   it('refuses a flag the verb does not take, instead of ignoring it', async () => {
@@ -445,11 +464,38 @@ describe('btid', () => {
     assert.deepEqual(project['labels'], ['ui', 'infra'])
   })
 
-  it('refuses a member the roster does not hold', async () => {
+  it('takes a member the roster does not hold, and refuses the commit', async () => {
     const code = await btid(['edit', 'project/alpha', '--members', 'ghost'])
     assert.equal(code, 1, lines.text)
-    assert.match(lines.text, /That person is not on the roster: ghost\. Add them with `person new` first\./)
     assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
+    assert.match(lines.text, /not on the roster/)
+    assert.equal(client.messages.length, 0, 'nothing was written')
+  })
+
+  it('accepts a nudge for good, and raises it again when revoked', async () => {
+    // 100% on a row that is not done is an `info` — allowed, but worth a sentence — so it is the shape an exemption is for.
+    assert.equal(await btid(['edit', 'task/alpha-a1b2', '--percent', '100']), 0, lines.text)
+    lines.written.length = 0
+
+    const accepted = await btid(['exempt', 'task/alpha-a1b2', 'DONE_AFTER_PROGRESS'])
+    assert.equal(accepted, 0, lines.text)
+    assert.match(lines.text, /exempted {2}alpha-a1b2 {3}DONE_AFTER_PROGRESS/)
+    assert.deepEqual(
+      client.json('projects/alpha/tasks.json')['alpha-a1b2']!['exemptions'].map((entry: { code: string }) => entry.code),
+      ['DONE_AFTER_PROGRESS'],
+      'the decision is on the row, so it survives the session',
+    )
+
+    const revoked = await btid(['unexempt', 'task/alpha-a1b2', 'DONE_AFTER_PROGRESS'])
+    assert.equal(revoked, 0, lines.text)
+    assert.deepEqual(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['exemptions'], [])
+  })
+
+  it('refuses to exempt a warning, because the gate is not a preference', async () => {
+    const code = await btid(['exempt', 'task/alpha-a1b2', 'BLOCKED_WITHOUT_REASON'])
+    assert.equal(code, 1, lines.text)
+    assert.match(lines.text, /EXEMPTION_INVALID/)
+    assert.match(lines.text, /is not a nudge on alpha-a1b2/)
     assert.equal(client.messages.length, 0, 'nothing was written')
   })
 
@@ -901,7 +947,10 @@ describe('btid', () => {
   it('a wrong verb at a known path answers with the verbs valid there', async () => {
     const code = await btid(['clear', 'task/alpha-a1b2'])
     assert.equal(code, 2)
-      assert.match(lines.text, /does not take .clear.\. It takes show, edit, promote, demote, comment, remove\./)
+      assert.match(
+        lines.text,
+        /does not take .clear.\. It takes show, edit, promote, demote, comment, exempt, unexempt, remove\./,
+      )
   })
 
   it('refuses attributes on promote, naming the verb that takes them', async () => {
@@ -923,7 +972,7 @@ describe('btid', () => {
     assert.equal(edit.writes, true)
     assert.ok(edit.flags.length > 0)
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
-      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'remove'])
+      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'exempt', 'unexempt', 'remove'])
       assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
       assert.equal(manifest.paths.length, 12, 'the path tree is indexed once')
   })
@@ -976,7 +1025,7 @@ describe('btid', () => {
     for (const expected of ['taskId', 'status', 'endDate', 'blocked', 'percentComplete']) {
       assert.ok(names.includes(expected), `task fields are missing ${expected}`)
     }
-    assert.equal(names.length, 29, 'the task row has 29 fields')
+    assert.equal(names.length, 30, 'the task row has 30 fields')
     assert.deepEqual(task.fields.find((field) => field.name === 'status')?.values, [
       'backlog',
       'todo',
