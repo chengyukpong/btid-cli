@@ -1,9 +1,9 @@
 # A plan can act as somebody
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-18T13:42:28+08:00
 - **Finished:** 2026-11-18T13:48:39+08:00
-- **Approved:** —
+- **Approved:** 2026-11-18T18:50:09+08:00
 
 ## Description
 

@@ -1,9 +1,9 @@
 # The grammar has drifted at its edges
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-18T14:12:09+08:00
 - **Finished:** 2026-11-18T14:56:00+08:00
-- **Approved:** —
+- **Approved:** 2026-11-18T18:50:09+08:00
 
 ## Description
 

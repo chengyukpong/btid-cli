@@ -1,9 +1,9 @@
 # The help page is the front door
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-18T15:24:00+08:00
 - **Finished:** 2026-11-18T15:52:00+08:00
-- **Approved:** —
+- **Approved:** 2026-11-18T18:50:09+08:00
 
 ## Description
 
