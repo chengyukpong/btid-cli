@@ -47,10 +47,12 @@ const project = {
 type Row = {
   status: string
   percentComplete: number
+  blocked: boolean
+  blockedReason: string
   createdAt: string
   firstPromotedAt: string | null
   activities: { day: string; steps: { step: string; name: string; state: string }[] }[]
-  steps: { id: string; name: string; done: boolean }[]
+  steps: { id: string; name: string; done: boolean; doneAt: string | null }[]
 }
 
 let client: FakeClient
@@ -121,6 +123,16 @@ describe('examples/task-life.btid', () => {
     assert.equal(stepsOn('2026-09-15')[0]?.step, row.steps[0]?.id)
     assert.deepEqual(stepsOn('2026-09-18').map((step) => step.name), ['Tag the build'])
     assert.deepEqual(stepsOn('2026-09-19').map((step) => step.name), ['Announce it', 'Thank the reviewer'])
+
+    // Each finished step says the day it finished — the row's own answer, not only the activity log's.
+    assert.deepEqual(
+      row.steps.map((step) => step.doneAt?.slice(0, 10)),
+      ['2026-09-15', '2026-09-18', '2026-09-19', '2026-09-19'],
+    )
+
+    // And the block was lifted on the 18th, so the reason went with it: a finished row does not still say why it was stuck.
+    assert.equal(row.blocked, false)
+    assert.equal(row.blockedReason, '')
   })
 
   it('ticks the step it names, not the last one added', async () => {

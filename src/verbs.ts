@@ -211,7 +211,12 @@ const taskShow: Verb = {
       const progress = handle.progress
       context.out.line('')
       context.out.line(`  steps  ${progress.done}/${progress.total}`)
-      for (const step of handle.steps) context.out.line(`    [${step.done ? 'x' : ' '}] ${step.id}  ${step.name}`)
+      for (const step of handle.steps) {
+        // When it was finished, beside the tick: a date nobody can read is the same as no date, and this one used to be
+        // permanently null.
+        const finished = step.done && step.doneAt !== null ? `   done ${step.doneAt.slice(0, 10)}` : ''
+        context.out.line(`    [${step.done ? 'x' : ' '}] ${step.id}  ${step.name}${finished}`)
+      }
     }
     // Two words, because the levels mean different things to a person reading a terminal: a warning holds a save, an info is a
     // nudge they may accept.
