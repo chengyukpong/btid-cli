@@ -1609,6 +1609,40 @@ const storeAdvance: Verb = {
   },
 }
 
+const personImpersonate: Verb = {
+  name: 'impersonate person/<id>',
+  summary: 'Act as somebody on the roster: every write after this is theirs. The manager may.',
+  usage: 'btid impersonate person/<id> [--json]',
+  // A write in the grammar's sense although it stages no row: it changes what the rows *after* it record, which is the whole
+  // reason a seeded plan needs it. Nothing is committed for it, and a plan's stream of commands simply continues.
+  writes: true,
+  async run(context) {
+    const id = context.args[0]
+    if (id === undefined) return usage('btid impersonate person/<id>', context.out, context.json)
+
+    const result = context.store.impersonatePerson(id)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    if (context.json) context.out.json(result.value)
+    else context.out.line(`acting as  ${result.value.id}   ${result.value.role}`)
+    return 0
+  },
+}
+
+const storeStopImpersonating: Verb = {
+  name: 'impersonate stop',
+  summary: 'Stop acting as somebody: the roster account comes back.',
+  usage: 'btid impersonate stop [--json]',
+  writes: true,
+  async run(context) {
+    context.store.stopImpersonating()
+    const actor = context.store.actor
+    if (context.json) context.out.json({ actor })
+    else context.out.line(`acting as  ${actor?.id ?? '(nobody)'}   ${actor?.role ?? ''}`.trimEnd())
+    return 0
+  },
+}
+
 const version: Verb = {
   name: 'version',
   summary: 'Which btid this is, and which schema it speaks.',
@@ -1675,6 +1709,8 @@ export const HANDLERS = {
   storeInit,
   storeWhoami,
   storeAdvance,
+  personImpersonate,
+  storeStopImpersonating,
   plan,
   version,
 } as const

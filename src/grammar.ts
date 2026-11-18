@@ -37,7 +37,7 @@ const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
 const { stepLs, stepShow, stepNew, stepMove, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
 const { cacheShow, cacheClear } = HANDLERS
-const { storeInit, storeWhoami, storeAdvance } = HANDLERS
+const { storeInit, storeWhoami, storeAdvance, personImpersonate, storeStopImpersonating } = HANDLERS
 const { plan, version } = HANDLERS
 
 /**
@@ -58,6 +58,9 @@ export const PATHS: readonly string[] = [
   'person',
   'person/<id>',
   'store',
+  // The one word in the tree that is not a row class. `impersonate` needs a direct object and "stop" is the object that
+  // means "back to the roster account"; it is a path because every verb's object is, and `matchPath` walks this list.
+  'stop',
   'cache',
 ]
 
@@ -87,6 +90,15 @@ export const RULES: readonly Rule[] = [
     args: place,
     example: 'btid advance store 2026-09-12T10:40:00+08:00',
   },
+  // Seeding a history, the other half: everything after this step is attributed to somebody else.
+  {
+    verb: 'impersonate',
+    path: 'person/<id>',
+    handler: personImpersonate,
+    args: place,
+    example: 'btid impersonate person/ivan-petrov',
+  },
+  { verb: 'impersonate', path: 'stop', handler: storeStopImpersonating, args: place, example: 'btid impersonate stop' },
   { verb: 'new', path: 'task/<id>/step', handler: stepNew, args: place },
 
   { verb: 'edit', path: 'task/<id>', handler: taskEdit, args: place, example: 'btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."' },

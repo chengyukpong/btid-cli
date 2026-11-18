@@ -11,7 +11,8 @@ import type { VerbContext } from './verb'
  * compile to the same `Step`, and the runner resolves each step through the one table in `grammar.ts`.
  *
  * What a step may be is decided here, not by the runner: a mutation, a `show`, or `whoami`. A plan cannot list (`ls` is a
- * report) and cannot change identity (there is no verb for it, and the check refuses one by name if one ever appears).
+ * report) — but it **can** change identity, through `impersonate`, which the core grants to the manager alone. That is what
+ * makes a seeded history attributed to the people who did the work rather than to the login that wrote it.
  */
 
 export interface Step {
@@ -297,12 +298,7 @@ export function check(plan: Plan): Plan | { message: string } {
 
     const reads = rule.verb === 'show' || rule.verb === 'whoami'
     if (rule.handler.writes !== true && !reads) {
-      return {
-        message:
-          rule.verb.includes('impersonate') || rule.verb.includes('signout')
-            ? `a plan runs as one login; “${rule.verb}” would change who that is`
-            : `a plan runs commands; “${rule.verb}” is a report`,
-      }
+      return { message: `a plan runs commands; “${rule.verb}” is a report` }
     }
     for (const [index, arg] of step.args.entries()) {
       const problem = checkRef(arg, bound)

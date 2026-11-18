@@ -974,7 +974,7 @@ describe('btid', () => {
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
       assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'exempt', 'unexempt', 'remove'])
       assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
-      assert.equal(manifest.paths.length, 12, 'the path tree is indexed once')
+      assert.equal(manifest.paths.length, 13, 'the path tree is indexed once')
   })
 
   it('says which btid it is, and which schema it speaks', async () => {

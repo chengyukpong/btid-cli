@@ -11,7 +11,7 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — twenty, no two-word ones
+## Verbs — twenty-one, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
@@ -20,6 +20,7 @@ by position.
 | `new` | create — the store mints the id | `task` · `project` · `person` · `store` · `task/<id>/step` |
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
 | `advance` | move the store's clock forward, so the steps after it are stamped with that day | `store` |
+| `impersonate` | act as somebody on the roster, so the steps after it are attributed to them; `stop` goes back | `person/<id>` · `stop` |
 | `promote` | one step up the ladder: backlog → todo → in progress → done — takes no attributes | `task/<id>` |
 | `demote` | one step back down the ladder — takes no attributes | `task/<id>` |
 | `archive` | tag the store, then delete a project and its work — there is no unarchive | `project/<id>` |
@@ -194,6 +195,23 @@ done task/$t.id/step/$s1.id
 removed — and the id is minted at the moment the step is created. So the plan binds the write (`let s1 = …`) and refers to
 it later as `$s1.id`. Every verb binds the row it *made*: a plan can therefore tick the step it added two days ago, not just
 the last one it added.
+
+**And who did it.** `impersonate person/<id>` attributes every write after it to that person — `createdById`, `updatedBy`,
+and the activity log's `by`. `impersonate stop` goes back to the account the CLI signed in as.
+
+```
+advance store 2026-11-11T14:30:00+08:00
+impersonate person/ivan-petrov
+new task/$t.id/step --name "Write the relay config"
+impersonate stop
+```
+
+Only the manager may act as somebody else; the id must name a person who is still on the roster; and the act is never
+persisted — a plan ends, and the next command is the manager again. The permission checks downstream run **as that person**,
+so acting as a member means a member's power. That is what makes the attribution believable rather than merely relabelled.
+
+What it does not change is the **commit author**: that is the account whose token wrote it. The rows say who did the work,
+the commits say who wrote them — a seed is attributed history, not forged history.
 
 The rows and their activity days follow the clock — six days of work become six records rather than one with an edit count.
 The **commits** do not: the engine stamps them when they are written, so a store seeded today shows today's commits
