@@ -1,0 +1,47 @@
+# A task's life, one day at a time.
+#
+# A store's history is written by commands, and `advance store` moves the clock for the steps that follow — which is what
+# makes this a *simulation* rather than a batch: every row and every activity day below carries the date in its comment,
+# not today's.
+#
+#   btid plan examples/task-life.btid --store <owner>/<repo>
+#
+# It expects a project called `alpha` with a window that contains 14–18 September, and somebody on the roster to hold the
+# work. Everything else — the ids, the revisions, the activity log — the store mints itself.
+
+# Fri 11 Sep — captured, and given the fields a promotion needs (owner, window, estimate, definition of done).
+advance store 2026-09-11T09:12:00+08:00
+let t = new task --project alpha --title "Cut the release"
+edit task/$t.id --assignee ivan --start 2026-09-14 --end 2026-09-18 --estimate 3 --dod "Tagged, announced, and the notes are written."
+
+# Sat 12 Sep — promoted: the row leaves the backlog and becomes work somebody holds.
+advance store 2026-09-12T10:40:00+08:00
+promote task/$t.id
+
+# Sun 13 Sep — the first step, on a Sunday, because ideas do not keep office hours.
+advance store 2026-09-13T14:05:00+08:00
+new task/$t.id/step --name "Write the notes"
+
+# Mon 14 Sep — three more steps, all in one sitting.
+advance store 2026-09-14T09:30:00+08:00
+new task/$t.id/step --name "Tag the build"
+new task/$t.id/step --name "Announce it"
+new task/$t.id/step --name "Thank the reviewer"
+
+# Tue 15 Sep — work under way.
+advance store 2026-09-15T17:05:00+08:00
+edit task/$t.id --percent 40
+
+# Thu 17 Sep — blocked, with the reason: a block without one is a wall with no note on it.
+advance store 2026-09-17T16:20:00+08:00
+edit task/$t.id --blocked on --blocked-reason "waiting for sign-off"
+
+# Fri 18 Sep — unblocked, and started.
+advance store 2026-09-18T09:15:00+08:00
+edit task/$t.id --blocked off
+promote task/$t.id
+
+# Sat 19 Sep — finished.
+advance store 2026-09-19T16:40:00+08:00
+edit task/$t.id --percent 100
+promote task/$t.id

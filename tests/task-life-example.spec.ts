@@ -1,0 +1,116 @@
+import assert from 'node:assert/strict'
+import { cpSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, it } from 'vitest'
+import { EXPECT } from 'btid-core'
+import { run } from '../src/cli'
+import { consoleOutput } from '../src/output'
+import { FakeClient, Lines } from './support'
+
+// The example in `examples/task-life.btid` is documentation, and documentation that does not run is a lie. This test is the
+// one that keeps it honest: it runs the shipped file against a seeded store and asserts the history it produced.
+
+const managerRow = {
+  id: 'chengyukpong',
+  displayName: 'Cheng',
+  githubHandle: 'chengyukpong',
+  role: 'manager',
+  active: true,
+  avatarUrl: null,
+}
+
+const ivanRow = {
+  id: 'ivan',
+  displayName: 'Ivan',
+  githubHandle: 'ivan',
+  role: 'member',
+  active: true,
+  avatarUrl: null,
+}
+
+const project = {
+  id: 'alpha',
+  name: 'Alpha',
+  description: '',
+  status: 'active',
+  ownerId: 'chengyukpong',
+  members: ['ivan', 'chengyukpong'],
+  color: '#1867C0',
+  labels: [],
+  startDate: '2026-09-01',
+  endDate: '2026-09-30',
+  createdAt: '2026-09-01T09:00:00+08:00',
+  updatedAt: '2026-09-01T09:00:00+08:00',
+}
+
+type Row = {
+  status: string
+  percentComplete: number
+  createdAt: string
+  firstPromotedAt: string | null
+  activities: { day: string }[]
+  steps: { name: string }[]
+}
+
+let client: FakeClient
+let lines: Lines
+let workspace: string
+
+const btid = (argv: string[]) =>
+  run({
+    argv: ['--store', 'chengyukpong/btid-data', ...argv],
+    env: { BTID_TOKEN: 'test-token' },
+    out: consoleOutput((text) => lines.write(text)),
+    clientFor: () => client,
+    tokenFor: () => 'test-token',
+    loginFor: async () => 'chengyukpong',
+    configPath: join(workspace, 'config.json'),
+    cacheDir: workspace,
+  })
+
+const rows = (): Record<string, Row> =>
+  JSON.parse(client.files.get('projects/alpha/tasks.json') ?? '{}') as Record<string, Row>
+
+describe('examples/task-life.btid', () => {
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), 'btid-life-'))
+    client = new FakeClient()
+    client.put('githubdb.json', { schemaVersion: EXPECT })
+    client.put('people.json', { [managerRow.id]: managerRow, [ivanRow.id]: ivanRow })
+    client.put('projects/alpha/project.json', { alpha: project })
+    lines = new Lines()
+  })
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true })
+  })
+
+  it('runs, and leaves the history it describes', async () => {
+    // The shipped file, copied into the workspace as the CLI would receive it.
+    const plan = join(workspace, 'task-life.btid')
+    cpSync(new URL('../examples/task-life.btid', import.meta.url), plan)
+
+    const code = await btid(['plan', plan])
+    assert.equal(code, 0, lines.text)
+
+    const [row] = Object.values(rows())
+    assert.ok(row !== undefined)
+
+    // One row, eight days, in order — the point of the exercise.
+    assert.deepEqual(
+      row.activities.map((entry) => entry.day),
+      ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-17', '2026-09-18', '2026-09-19'],
+    )
+    assert.equal(row.createdAt, '2026-09-11T09:12:00.000+08:00')
+    assert.equal(row.firstPromotedAt, '2026-09-12T10:40:00.000+08:00')
+    assert.equal(row.status, 'done')
+    assert.equal(row.percentComplete, 100)
+    assert.deepEqual(row.steps.map((step) => step.name), [
+      'Write the notes',
+      'Tag the build',
+      'Announce it',
+      'Thank the reviewer',
+    ])
+  })
+})
