@@ -185,8 +185,15 @@ edit task/$t.id --assignee ivan --start 2026-09-14 --end 2026-09-18 --estimate 3
 advance store 2026-09-12T10:40:00+08:00
 promote task/$t.id
 advance store 2026-09-13T14:05:00+08:00
-new task/$t.id/step --name "Write the notes"
+let s1 = new task/$t.id/step --name "Write the notes"
+advance store 2026-09-15T17:05:00+08:00
+done task/$t.id/step/$s1.id
 ```
+
+**A step is named, not numbered.** `done` takes a step's id — the position is refused, because it changes when a step is
+removed — and the id is minted at the moment the step is created. So the plan binds the write (`let s1 = …`) and refers to
+it later as `$s1.id`. Every verb binds the row it *made*: a plan can therefore tick the step it added two days ago, not just
+the last one it added.
 
 The rows and their activity days follow the clock — six days of work become six records rather than one with an edit count.
 The **commits** do not: the engine stamps them when they are written, so a store seeded today shows today's commits

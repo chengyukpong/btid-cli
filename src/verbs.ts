@@ -1348,7 +1348,12 @@ const stepNew: Verb = {
     const committed = await commit(context, `step new ${id}`)
     if (committed !== null && committed !== 0) return committed
 
-    context.result = result.value
+    // What a plan binds is the row the verb **made**, not the task it made it on. A step is addressed by its id, that id is
+    // minted here, and a plan that cannot name it can never finish it three days later. `addStep` hands back the task, so
+    // the step is the one that was not there before. The JSON answer stays the task: this changes what a plan binds, and
+    // nothing that a person or an agent reads.
+    const added = result.value.steps.find((step) => !(before?.steps ?? []).some((old) => old.id === step.id))
+    context.result = added ?? result.value
     return printStepAnswer(context, result.value, unchanged, name)
   },
 }

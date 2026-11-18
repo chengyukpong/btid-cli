@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cpSync, mkdtempSync, rmSync } from 'node:fs'
+import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, it } from 'vitest'
@@ -49,8 +49,8 @@ type Row = {
   percentComplete: number
   createdAt: string
   firstPromotedAt: string | null
-  activities: { day: string }[]
-  steps: { name: string }[]
+  activities: { day: string; steps: { step: string; name: string; state: string }[] }[]
+  steps: { id: string; name: string; done: boolean }[]
 }
 
 let client: FakeClient
@@ -112,5 +112,43 @@ describe('examples/task-life.btid', () => {
       'Announce it',
       'Thank the reviewer',
     ])
+    assert.deepEqual(row.steps.map((step) => step.done), [true, true, true, true])
+
+    // Each tick lands on the day it happened, and names the step it was for — the 13th's step ticked on the 15th, while
+    // three later steps already existed. That is the whole point of binding the write: the tick is not "the last step".
+    const stepsOn = (day: string) => row.activities.find((entry) => entry.day === day)?.steps ?? []
+    assert.deepEqual(stepsOn('2026-09-15').map((step) => [step.name, step.state]), [['Write the notes', 'ticked']])
+    assert.equal(stepsOn('2026-09-15')[0]?.step, row.steps[0]?.id)
+    assert.deepEqual(stepsOn('2026-09-18').map((step) => step.name), ['Tag the build'])
+    assert.deepEqual(stepsOn('2026-09-19').map((step) => step.name), ['Announce it', 'Thank the reviewer'])
+  })
+
+  it('ticks the step it names, not the last one added', async () => {
+    const plan = [
+      'advance store 2026-09-11T09:00:00+08:00',
+      'let t = new task --project alpha --title "Two steps"',
+      'let first = new task/$t.id/step --name "First"',
+      'let second = new task/$t.id/step --name "Second"',
+      // The later step first, then the earlier one: a binding that quietly meant "the last added" would fail here.
+      'advance store 2026-09-12T09:00:00+08:00',
+      'done task/$t.id/step/$second.id',
+      'advance store 2026-09-13T09:00:00+08:00',
+      'done task/$t.id/step/$first.id',
+    ].join('\n')
+    const file = join(workspace, 'two-steps.btid')
+    writeFileSync(file, `${plan}\n`)
+
+    const code = await btid(['plan', file])
+    assert.equal(code, 0, lines.text)
+
+    const [row] = Object.values(rows())
+    assert.ok(row !== undefined)
+    assert.deepEqual(row.steps.map((step) => [step.name, step.done]), [
+      ['First', true],
+      ['Second', true],
+    ])
+    const stepsOn = (day: string) => row.activities.find((entry) => entry.day === day)?.steps ?? []
+    assert.deepEqual(stepsOn('2026-09-12').map((step) => step.name), ['Second'])
+    assert.deepEqual(stepsOn('2026-09-13').map((step) => step.name), ['First'])
   })
 })
