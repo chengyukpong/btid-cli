@@ -1,9 +1,9 @@
 # A plan step can name its day
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-18T12:03:48+08:00
 - **Finished:** 2026-11-18T12:21:18+08:00
-- **Approved:** —
+- **Approved:** 2026-11-18T13:05:00+08:00
 
 ## Description
 

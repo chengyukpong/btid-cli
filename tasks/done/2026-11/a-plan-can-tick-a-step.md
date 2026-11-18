@@ -1,9 +1,9 @@
 # A plan can tick a step
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-18T12:30:00+08:00
 - **Finished:** 2026-11-18T12:33:41+08:00
-- **Approved:** —
+- **Approved:** 2026-11-18T13:05:00+08:00
 
 ## Description
 
