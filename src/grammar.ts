@@ -31,13 +31,14 @@ export interface Rule {
   example?: string
 }
 
-const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskComment, taskExempt, taskUnexempt, taskRemove } = HANDLERS
-const { projectLs, projectShow, projectNew, projectEdit, projectArchive, projectMemberAdd, projectMemberRemove, projectRemove } = HANDLERS
+const { taskLs, taskShow, taskNew, taskEdit, taskPromote, taskDemote, taskRemove } = HANDLERS
+const { projectLs, projectShow, projectNew, projectEdit, projectArchive, projectMemberAdd, projectMemberRemove, projectLabelAdd, projectLabelRemove, projectRemove } = HANDLERS
 const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
-const { stepLs, stepShow, stepNew, stepMove, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
+const { stepLs, stepShow, stepNew, stepMove, stepRename, tickStep, untickStep, stepRemove } = HANDLERS
+const { commentAdd, exemptionAdd, exemptionRemove } = HANDLERS
 const { cacheShow, cacheClear } = HANDLERS
-const { storeInit, storeWhoami, storeAdvance, personImpersonate, storeStopImpersonating } = HANDLERS
+const { storeInit, storeWhoami, storeAdvance, personImpersonate, unimpersonate } = HANDLERS
 const { plan, version } = HANDLERS
 
 /**
@@ -52,15 +53,16 @@ export const PATHS: readonly string[] = [
   'task/<id>/step',
   'task/<id>/step/<step-id>',
   'task/<id>/label',
+  // Things a task holds, each named by the caller rather than minted: a comment's body, an exemption's code.
+  'task/<id>/comment',
+  'task/<id>/exemption',
   'project',
   'project/<id>',
     'project/<id>/member',
+  'project/<id>/label',
   'person',
   'person/<id>',
   'store',
-  // The one word in the tree that is not a row class. `impersonate` needs a direct object and "stop" is the object that
-  // means "back to the roster account"; it is a path because every verb's object is, and `matchPath` walks this list.
-  'stop',
   'cache',
 ]
 
@@ -98,7 +100,6 @@ export const RULES: readonly Rule[] = [
     args: place,
     example: 'btid impersonate person/ivan-petrov',
   },
-  { verb: 'impersonate', path: 'stop', handler: storeStopImpersonating, args: place, example: 'btid impersonate stop' },
   { verb: 'new', path: 'task/<id>/step', handler: stepNew, args: place },
 
   { verb: 'edit', path: 'task/<id>', handler: taskEdit, args: place, example: 'btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."' },
@@ -108,9 +109,9 @@ export const RULES: readonly Rule[] = [
 
   { verb: 'promote', path: 'task/<id>', handler: taskPromote, args: place, example: 'btid promote task/alpha-n7qk' },
   { verb: 'demote', path: 'task/<id>', handler: taskDemote, args: place, example: 'btid demote task/alpha-n7qk' },
-  { verb: 'comment', path: 'task/<id>', handler: taskComment, args: place, example: 'btid comment task/alpha-n7qk waiting on the schema review' },
-  { verb: 'exempt', path: 'task/<id>', handler: taskExempt, args: place, example: 'btid exempt task/alpha-n7qk DEFINITION_REQUIRED' },
-  { verb: 'unexempt', path: 'task/<id>', handler: taskUnexempt, args: place, example: 'btid unexempt task/alpha-n7qk DEFINITION_REQUIRED' },
+  { verb: 'add', path: 'task/<id>/comment', handler: commentAdd, args: place, example: 'btid add task/alpha-n7qk/comment waiting on the review' },
+  { verb: 'add', path: 'task/<id>/exemption', handler: exemptionAdd, args: place, example: 'btid add task/alpha-n7qk/exemption DEFINITION_REQUIRED' },
+  { verb: 'remove', path: 'task/<id>/exemption', handler: exemptionRemove, args: place, example: 'btid remove task/alpha-n7qk/exemption DEFINITION_REQUIRED' },
 
   { verb: 'remove', path: 'task/<id>', handler: taskRemove, args: place, example: 'btid remove task/alpha-n7qk --yes' },
   { verb: 'remove', path: 'project/<id>', handler: projectRemove, args: place },
@@ -121,17 +122,22 @@ export const RULES: readonly Rule[] = [
 
   { verb: 'add', path: 'task/<id>/label', handler: labelAdd, args: place, example: 'btid add task/alpha-n7qk/label ui' },
   { verb: 'add', path: 'project/<id>/member', handler: projectMemberAdd, args: place, example: 'btid add project/alpha-n7qk/member ivan' },
+  { verb: 'add', path: 'project/<id>/label', handler: projectLabelAdd, args: place, example: 'btid add project/alpha-n7qk/label ui' },
+  { verb: 'remove', path: 'project/<id>/label', handler: projectLabelRemove, args: place },
 
   { verb: 'rename', path: 'task/<id>/step/<step-id>', handler: stepRename, args: place, example: 'btid rename task/alpha-n7qk/step/st-a1b2 --name "Measure the header at 1440"' },
   { verb: 'move', path: 'task/<id>/step/<step-id>', handler: stepMove, args: place, example: 'btid move task/alpha-n7qk/step/st-a1b2 --to 1' },
 
-  { verb: 'done', path: 'task/<id>/step/<step-id>', handler: stepDone, args: place, example: 'btid done task/alpha-n7qk/step/st-a1b2' },
-  { verb: 'undo', path: 'task/<id>/step/<step-id>', handler: stepUndo, args: place, example: 'btid undo task/alpha-n7qk/step/st-a1b2' },
+  { verb: 'tick', path: 'task/<id>/step/<step-id>', handler: tickStep, args: place, example: 'btid tick task/alpha-n7qk/step/st-a1b2' },
+  { verb: 'untick', path: 'task/<id>/step/<step-id>', handler: untickStep, args: place, example: 'btid untick task/alpha-n7qk/step/st-a1b2' },
 
   { verb: 'clear', path: 'cache', handler: cacheClear, args: place, example: 'btid clear cache' },
 
   { verb: 'plan', path: null, handler: plan, args: place, example: 'btid plan seed.btid' },
   { verb: 'whoami', path: null, handler: storeWhoami, args: place, example: 'btid whoami' },
+  // No path, because the act has no object: it ends an impersonation rather than addressing a row. A "stop" path would have
+  // been the only mode in a tree of nouns.
+  { verb: 'unimpersonate', path: null, handler: unimpersonate, args: place, example: 'btid unimpersonate' },
   { verb: 'version', path: null, handler: version, args: place, example: 'btid version' },
   { verb: 'help', path: null, handler: help, args: place, example: 'btid help edit' },
 ]

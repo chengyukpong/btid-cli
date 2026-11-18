@@ -143,9 +143,9 @@ describe('examples/task-life.btid', () => {
       'let second = new task/$t.id/step --name "Second"',
       // The later step first, then the earlier one: a binding that quietly meant "the last added" would fail here.
       'advance store 2026-09-12T09:00:00+08:00',
-      'done task/$t.id/step/$second.id',
+      'tick task/$t.id/step/$second.id',
       'advance store 2026-09-13T09:00:00+08:00',
-      'done task/$t.id/step/$first.id',
+      'tick task/$t.id/step/$first.id',
     ].join('\n')
     const file = join(workspace, 'two-steps.btid')
     writeFileSync(file, `${plan}\n`)

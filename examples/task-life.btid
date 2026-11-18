@@ -9,7 +9,7 @@
 # It expects a project called `alpha` with a window that contains 14–18 September, and somebody on the roster to hold the
 # work. Everything else — the ids, the revisions, the activity log — the store mints itself.
 #
-# The steps are *named*, not numbered: `done` takes a step's id, and the id is only known once it exists. Binding the write
+# The steps are *named*, not numbered: `tick` takes a step's id, and the id is only known once it exists. Binding the write
 # to `$s1` is how a plan says "the step I added on the 13th" on the 15th.
 
 # Fri 11 Sep — captured, and given the fields a promotion needs (owner, window, estimate, definition of done).
@@ -33,7 +33,7 @@ let s4 = new task/$t.id/step --name "Thank the reviewer"
 
 # Tue 15 Sep — the notes are written, and ticked on the day they were written.
 advance store 2026-09-15T17:05:00+08:00
-done task/$t.id/step/$s1.id
+tick task/$t.id/step/$s1.id
 edit task/$t.id --percent 40
 
 # Thu 17 Sep — blocked, with the reason: a block without one is a wall with no note on it.
@@ -44,11 +44,11 @@ edit task/$t.id --blocked on --blocked-reason "waiting for sign-off"
 advance store 2026-09-18T09:15:00+08:00
 edit task/$t.id --blocked off
 promote task/$t.id
-done task/$t.id/step/$s2.id
+tick task/$t.id/step/$s2.id
 
 # Sat 19 Sep — announced, thanked, and finished.
 advance store 2026-09-19T16:40:00+08:00
-done task/$t.id/step/$s3.id
-done task/$t.id/step/$s4.id
+tick task/$t.id/step/$s3.id
+tick task/$t.id/step/$s4.id
 edit task/$t.id --percent 100
 promote task/$t.id

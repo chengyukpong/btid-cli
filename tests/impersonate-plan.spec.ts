@@ -84,7 +84,7 @@ describe('impersonate in a plan', () => {
       'new task --project alpha --title "The policy"',
       'impersonate person/mei-tan',
       'new task --project alpha --title "The bundle"',
-      'impersonate stop',
+      'unimpersonate',
       'new task --project alpha --title "The cutover"',
     ].join('\n')
     const file = join(workspace, 'as.btid')

@@ -304,7 +304,6 @@ describe('btid', () => {
       '--blocked', 'on',
       '--blocked-reason', 'Waiting for the header',
       '--blocked-by', 'alpha-c3d4',
-      '--labels', 'ui,billing',
       '--start', '2026-11-10',
       '--end', '2026-11-20',
       '--priority', 'urgent',
@@ -321,7 +320,6 @@ describe('btid', () => {
     assert.equal(row['blocked'], true)
     assert.equal(row['blockedReason'], 'Waiting for the header')
     assert.deepEqual(row['blockedBy'], ['alpha-c3d4'])
-    assert.deepEqual(row['labels'], ['ui', 'billing'])
     assert.equal(row['startDate'], '2026-11-10')
     assert.equal(row['endDate'], '2026-11-20')
     assert.equal(row['priority'], 'urgent')
@@ -357,11 +355,13 @@ describe('btid', () => {
   })
 
   it('adds a task’s new label to its project, in the same commit', async () => {
-    const code = await btid(['edit', 'task/alpha-a1b2', '--labels', 'ui,billing'])
+    // One door for a label: the collection path. A label the project has never seen joins its vocabulary in the same write,
+    // so the task and the project are covered by one commit.
+    const code = await btid(['add', 'task/alpha-a1b2/label', 'ui'])
     assert.equal(code, 0, lines.text)
     assert.equal(client.messages.length, 1, 'one commit covers the task and the project')
-    assert.deepEqual(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['labels'], ['ui', 'billing'])
-    assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['labels'], ['ui', 'billing'])
+    assert.deepEqual(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['labels'], ['ui'])
+    assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['labels'], ['ui'])
   })
 
   it('adds and removes one label through the collection path, with the name as data', async () => {
@@ -397,13 +397,13 @@ describe('btid', () => {
     assert.equal(shown.done, false)
 
     lines.written.length = 0
-    assert.equal(await btid(['done', `task/alpha-a1b2/step/${stepId}`]), 0, lines.text)
-    assert.equal(steps()[0]!.done, true, 'done ticked it')
-    assert.equal(client.messages.at(-1), `step done alpha-a1b2 ${stepId}`)
+    assert.equal(await btid(['tick', `task/alpha-a1b2/step/${stepId}`]), 0, lines.text)
+    assert.equal(steps()[0]!.done, true, 'tick set it')
+    assert.equal(client.messages.at(-1), `step tick alpha-a1b2 ${stepId}`)
 
     lines.written.length = 0
-    assert.equal(await btid(['undo', `task/alpha-a1b2/step/${stepId}`]), 0, lines.text)
-    assert.equal(steps()[0]!.done, false, 'undo is its inverse')
+    assert.equal(await btid(['untick', `task/alpha-a1b2/step/${stepId}`]), 0, lines.text)
+    assert.equal(steps()[0]!.done, false, 'untick is its inverse')
 
     lines.written.length = 0
     assert.equal(await btid(['rename', `task/alpha-a1b2/step/${stepId}`, '--name', 'Measure twice']), 0, lines.text)
@@ -416,10 +416,9 @@ describe('btid', () => {
   })
 
   it('clears nullable fields with none', async () => {
-    const code = await btid(['edit', 'task/alpha-a1b2', '--labels', 'none', '--blocked-by', 'none'])
+    const code = await btid(['edit', 'task/alpha-a1b2', '--blocked-by', 'none'])
     assert.equal(code, 0, lines.text)
     const row = client.json('projects/alpha/tasks.json')['alpha-a1b2']!
-    assert.deepEqual(row['labels'], [])
     assert.deepEqual(row['blockedBy'], [])
   })
 
@@ -446,26 +445,31 @@ describe('btid', () => {
     assert.equal(client.messages.length, 0)
   })
 
-  it('edits a project’s colour, members and labels', async () => {
+  it('edits a project’s colour, and opens it to somebody through the collection path', async () => {
     client.put('people.json', {
       chengyukpong: managerRow,
       ivan: { ...managerRow, id: 'ivan', displayName: 'Ivan', githubHandle: 'ivan', role: 'member' },
     })
-    const code = await btid([
-      'edit', 'project/alpha',
-      '--color', '#FF8800',
-      '--members', 'ivan',
-      '--labels', 'ui,infra',
-    ])
-    assert.equal(code, 0, lines.text)
+    // Colour is a field, so it is `edit`; members and labels are lists, so they have paths of their own — one door per fact.
+    assert.equal(await btid(['edit', 'project/alpha', '--color', '#FF8800']), 0, lines.text)
+    assert.equal(await btid(['add', 'project/alpha/member', 'ivan']), 0, lines.text)
+    assert.equal(await btid(['add', 'project/alpha/label', 'ui']), 0, lines.text)
+    assert.equal(await btid(['add', 'project/alpha/label', 'infra']), 0, lines.text)
+
     const project = client.json('projects/alpha/project.json')['alpha']!
     assert.equal(project['color'], '#FF8800')
     assert.deepEqual(project['members'], ['ivan'])
     assert.deepEqual(project['labels'], ['ui', 'infra'])
+
+    // And the same paths take them away again.
+    assert.equal(await btid(['remove', 'project/alpha/member', 'ivan']), 0, lines.text)
+    assert.equal(await btid(['remove', 'project/alpha/label', 'ui']), 0, lines.text)
+    assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['members'], [])
+    assert.deepEqual(client.json('projects/alpha/project.json')['alpha']!['labels'], ['infra'])
   })
 
   it('takes a member the roster does not hold, and refuses the commit', async () => {
-    const code = await btid(['edit', 'project/alpha', '--members', 'ghost'])
+    const code = await btid(['add', 'project/alpha/member', 'ghost'])
     assert.equal(code, 1, lines.text)
     assert.match(lines.text, /PROJECT_MEMBER_UNKNOWN/)
     assert.match(lines.text, /not on the roster/)
@@ -477,7 +481,7 @@ describe('btid', () => {
     assert.equal(await btid(['edit', 'task/alpha-a1b2', '--percent', '100']), 0, lines.text)
     lines.written.length = 0
 
-    const accepted = await btid(['exempt', 'task/alpha-a1b2', 'DONE_AFTER_PROGRESS'])
+    const accepted = await btid(['add', 'task/alpha-a1b2/exemption', 'DONE_AFTER_PROGRESS'])
     assert.equal(accepted, 0, lines.text)
     assert.match(lines.text, /exempted {2}alpha-a1b2 {3}DONE_AFTER_PROGRESS/)
     assert.deepEqual(
@@ -486,13 +490,13 @@ describe('btid', () => {
       'the decision is on the row, so it survives the session',
     )
 
-    const revoked = await btid(['unexempt', 'task/alpha-a1b2', 'DONE_AFTER_PROGRESS'])
+    const revoked = await btid(['remove', 'task/alpha-a1b2/exemption', 'DONE_AFTER_PROGRESS'])
     assert.equal(revoked, 0, lines.text)
     assert.deepEqual(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['exemptions'], [])
   })
 
   it('refuses to exempt a warning, because the gate is not a preference', async () => {
-    const code = await btid(['exempt', 'task/alpha-a1b2', 'BLOCKED_WITHOUT_REASON'])
+    const code = await btid(['add', 'task/alpha-a1b2/exemption', 'BLOCKED_WITHOUT_REASON'])
     assert.equal(code, 1, lines.text)
     assert.match(lines.text, /EXEMPTION_INVALID/)
     assert.match(lines.text, /is not a nudge on alpha-a1b2/)
@@ -675,7 +679,7 @@ describe('btid', () => {
 
     it('comments on a task: the text is the free token, the author is the store', async () => {
       lines.written.length = 0
-      const code = await btid(['comment', 'task/alpha-a1b2', 'waiting', 'on', 'the', 'review'])
+      const code = await btid(['add', 'task/alpha-a1b2/comment', 'waiting', 'on', 'the', 'review'])
       assert.equal(code, 0, lines.text)
       assert.match(lines.text, /commented {2}alpha-a1b2 {3}cm-/)
       assert.equal(client.messages.at(-1), 'comment alpha-a1b2')
@@ -687,9 +691,9 @@ describe('btid', () => {
     })
 
     it('refuses a comment with nothing in it', async () => {
-      const code = await btid(['comment', 'task/alpha-a1b2'])
+      const code = await btid(['add', 'task/alpha-a1b2/comment'])
       assert.equal(code, 2)
-      assert.match(lines.text, /btid comment task\/<id> <text>/)
+      assert.match(lines.text, /btid add task\/<id>\/comment <text>/)
     })
 
     it('refuses to archive without --yes, and says there is no unarchive', async () => {
@@ -722,7 +726,7 @@ describe('btid', () => {
     })
 
     it('shows comments with --details, because a comment is not a field', async () => {
-      await btid(['comment', 'task/alpha-a1b2', 'A note for the record'])
+      await btid(['add', 'task/alpha-a1b2/comment', 'A note for the record'])
       lines.written.length = 0
       assert.equal(await btid(['show', 'task/alpha-a1b2', '--details']), 0)
       assert.match(lines.text, /comments {2}1/)
@@ -776,7 +780,7 @@ describe('btid', () => {
         'let ivan  = new person --handle ivan --name Ivan',
         'let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18',
         'let task  = new task --project $gamma.id --title "First task"',
-        '            edit project/$gamma.id --members $ivan.id',
+        '            add project/$gamma.id/member $ivan.id',
         '            edit task/$task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
         '            promote task/$task.id',
       ].join('\n'),
@@ -949,7 +953,7 @@ describe('btid', () => {
     assert.equal(code, 2)
       assert.match(
         lines.text,
-        /does not take .clear.\. It takes show, edit, promote, demote, comment, exempt, unexempt, remove\./,
+        /does not take .clear.\. It takes show, edit, promote, demote, remove\./,
       )
   })
 
@@ -972,9 +976,9 @@ describe('btid', () => {
     assert.equal(edit.writes, true)
     assert.ok(edit.flags.length > 0)
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
-      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'comment', 'exempt', 'unexempt', 'remove'])
+      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'remove'])
       assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
-      assert.equal(manifest.paths.length, 13, 'the path tree is indexed once')
+      assert.equal(manifest.paths.length, 15, 'the path tree is indexed once')
   })
 
   it('says which btid it is, and which schema it speaks', async () => {
