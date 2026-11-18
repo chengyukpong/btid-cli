@@ -7,7 +7,7 @@
 export const CLI_VERSION = '0.21.0'
 
 /** The manifest's own shape version: bump it when a field of `btid help --json` changes meaning. */
-export const MANIFEST_VERSION = 2
+export const MANIFEST_VERSION = 3
 
 /** One line, for `btid version` and `--version`. */
 export const versionLine = (coreSchema: number): string =>

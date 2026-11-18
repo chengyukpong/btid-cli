@@ -104,9 +104,8 @@ Already filed elsewhere, and not to be duplicated here:
 - [x] `--preview` on `plan` (4); `--dry-run` now means one thing everywhere.
 - [x] `done`/`undo` → `tick`/`untick` (10), and `comment` → `add task/<id>/comment` (18).
 - [x] `unimpersonate` (6) — pathless, and `stop` is out of the tree.
-- [ ] **`session` as a third kind on `Rule`** (5) — not done: `advance store` and `impersonate` still declare `writes: true`
-      while staging nothing. The honest fix is a third category, and it was not needed to finish the verbs.
-- [ ] **Manifest v3: flags per path** (13) — not done. `help --json` still unions a verb's flags across its paths.
+- [x] **`session` as a third kind on `Rule`** (5) — done in `the-help-page-is-the-front-door`, together with the manifest work.
+- [x] **Manifest v3: flags per path** (13) — done there too.
 
 ## What landed (2026-11-18)
 

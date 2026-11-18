@@ -161,11 +161,37 @@ not have to explain itself.
 ## Help is one long page, not a lookup
 
 `btid help` prints the whole table — every verb with the paths it takes, and every path with the verbs valid on it — because
-reading it should cost one command, not a question per combination. `btid help <verb>` adds that verb's flags and one example.
+reading it should cost one command, not a question per combination. It also carries the words a newcomer needs before the table
+makes sense: what a store is, where ids come from, what `data` and `--flag` mean, the **query** form `ls` alone speaks, every
+global flag, and **every exit code** (0 ok, 1 refused, 2 usage or a schema mismatch, 3 a row the store rejects, 4 a conflict, 5
+no store).
+
+`btid help <verb>` gives that verb one page: whether it reads, writes or changes the session, **every usage line** — one per
+shape, each with its own sentence, because `add task/<id>/comment` and `add project/<id>/label` are different acts that share a
+verb — its flags with a description each, and one example.
+
+The page is complete by construction rather than by diligence: `src/help-text.ts` holds a sentence per verb and a line per flag,
+and `tests/help.spec.ts` fails when a verb or a flag lands without one. A verb described by "whichever of its handlers was
+registered first" is the bug that check exists to catch — `add` read *"Say something on a task"* until it was.
 
 There is deliberately no `btid help <path>`. A path is data, and a help command that took a path would make the one command you
 run when you are lost depend on typing the thing you are lost about. The **refusals** carry the path's verbs instead: a wrong
 verb at a known path answers with the verbs valid there, which is the moment you actually need it.
+
+## What a command does to the store
+
+Three kinds, and a plan treats them differently:
+
+| kind | verbs | a plan may contain it | commits |
+|---|---|---|---|
+| reads | `ls`, `show`, `whoami` | yes | no |
+| writes | everything else | yes | one, at the end or per step |
+| **session** | `advance`, `impersonate`, `unimpersonate` | yes | **nothing** |
+
+A session act stages no row and commits nothing — it changes what the rows *after* it record, or when they were recorded. It is
+neither a write nor a read, and saying so is what `Rule.handler.session` is for: before that field existed, `advance store` and
+`impersonate` declared `writes: true` so the plan runner would accept them, which was a comment apologising for a flag. The
+manifest reports it (`"session": true`) and the help page says it in words.
 
 ## The life of a task, in this grammar
 
@@ -279,8 +305,10 @@ containing September's work. Backdating a commit would be rewriting history, whi
 - **Breaking.** 0.12.0, hard cut: the old spellings are refused with a message naming the new one, not silently accepted.
 - **One resolver, no second implementation.** The verb bodies keep reading their own arguments; the resolver matches
   `verb + path`, then calls the existing command with the path's ids in place. Nothing about the rules moves.
-- **The manifest becomes grammar-shaped** (`help --json`, version 2): verbs with the paths each applies to, because an agent
-  needs to know which combinations are legal, not just which words exist.
+- **The manifest becomes grammar-shaped** (`help --json`): verbs with the paths each applies to, because an agent needs to know
+  which combinations are legal, not just which words exist. **Version 3** carries the flags, usage line and kind of each path —
+  v2 unioned a verb's flags, so it could not answer *"may I pass `--percent` to `edit project/<id>`?"* (no), and it reported
+  session acts as writes.
 
 ## Build order
 

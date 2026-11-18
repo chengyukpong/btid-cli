@@ -8,20 +8,71 @@ import {
   rulesFor,
   summaryOf,
   verbsAt,
+  type Rule,
 } from './grammar'
+import {
+  CONCEPTS,
+  EXIT_CODES,
+  FLAG_HELP,
+  GLOBAL_HELP,
+  USAGE_LINE,
+  VERB_GROUPS,
+  VERB_HELP,
+  type FlagHelp,
+} from './help-text'
 import { CLI_VERSION, MANIFEST_VERSION } from './version'
 import { usage, type Verb, type VerbContext } from './verb'
 
-/** The flags a verb takes, unioned over its paths, so `help <verb>` can list them once. */
-const flagsOfVerb = (verb: string): { name: string; value: boolean }[] => {
-  const kinds = new Map<string, 'value' | 'boolean'>()
-  for (const rule of rulesFor(verb)) {
-    for (const [name, kind] of Object.entries(rule.handler.flags ?? {})) {
-      if (!kinds.has(name)) kinds.set(name, kind)
-    }
-  }
-  return [...kinds].map(([name, kind]) => ({ name, value: kind === 'value' }))
+/** What a verb does to the store: nothing, one commit, a change to the session, or nothing that outlives the machine. */
+type Kind = 'reads' | 'writes' | 'session' | 'binary'
+
+/**
+ * The kind of a verb.
+ *
+ * The order matters. `noStore` is a property of a *rule*, not a verb: `show` has a `show cache` rule that needs no store, and
+ * asking "does any rule set noStore" would classify the whole verb as binary — which is what happened the first time.
+ * A verb is binary only when **all** of its shapes are.
+ */
+const kindOf = (verb: string): Kind => {
+  const rules = rulesFor(verb)
+  if (rules.length === 0) return 'binary'
+  if (rules.every((rule) => rule.handler.noStore === true)) return 'binary'
+  if (rules.every((rule) => rule.handler.session === true)) return 'session'
+  if (rules.some((rule) => rule.handler.writes === true)) return 'writes'
+  return 'reads'
 }
+
+/** The verb's own sentence, falling back to its first handler's if somebody added a verb without one (a test forbids it). */
+const verbSummary = (verb: string): string => VERB_HELP[verb] ?? summaryOf(verb)
+
+/** What the kind means in one phrase, for the top of `help <verb>`. */
+const KIND_WORDS: Record<Kind, string> = {
+  reads: 'READS — asks the store, writes nothing',
+  writes: 'WRITES — stages a change and commits once; --dry-run shows it without the commit',
+  session: 'CHANGES THE SESSION — nothing staged, nothing committed',
+  binary: 'ABOUT THE BINARY OR THE CACHE — needs no store',
+}
+
+/** One rule's flags, described. Order is the handler's, so `edit` lists its fields in the order the row holds them. */
+const flagsOfRule = (rule: Rule): FlagHelp[] =>
+  Object.entries(rule.handler.flags ?? {}).map(([name, kind]) => ({
+    name,
+    takes: kind === 'value' ? 'value' : 'none',
+    what: FLAG_HELP[name] ?? '(no description yet)',
+  }))
+
+/** The union of a verb's flags across its paths, described once each. */
+const flagsOfVerb = (verb: string): FlagHelp[] => {
+  const seen = new Map<string, FlagHelp>()
+  for (const rule of rulesFor(verb)) {
+    for (const flag of flagsOfRule(rule)) if (!seen.has(flag.name)) seen.set(flag.name, flag)
+  }
+  return [...seen.values()]
+}
+
+/** `--name <value>` or `--name`, unless the flag has a spelling of its own (`-v`). */
+const flagText = (flag: FlagHelp): string =>
+  flag.spell ?? (flag.takes === 'value' ? `--${flag.name} <value>` : `--${flag.name}`)
 
 /**
  * The help page: one long page, not a lookup.
@@ -30,29 +81,53 @@ const flagsOfVerb = (verb: string): { name: string; value: boolean }[] => {
  * reading it should cost one command, not a question per combination. There is deliberately no `btid help <path>`: a path
  * is data, and the command you run when you are lost must not require typing the thing you are lost about. The refusals
  * carry a path's verbs instead.
+ *
+ * The words come from `help-text.ts`, so the page is complete or a test fails — a verb with no sentence, or a flag with no
+ * description, is a bug rather than a gap somebody is expected to live with.
  */
 export const helpText = (): string => {
-  const verbWidth = Math.max(...VERB_NAMES.map((verb) => verb.length))
+  const verbWidth = Math.max(...VERB_NAMES.map((verb) => verb.length), 8)
   const pathWidth = Math.max(...PATHS.map((path) => path.length))
+  const flagWidth = Math.max(...GLOBAL_HELP.map((flag) => flagText(flag).length))
+  const termWidth = Math.max(...CONCEPTS.map((concept) => concept.term.length))
+
+  const verbsByGroup = VERB_GROUPS.flatMap((group) => [
+    `  ${group.kind}`,
+    ...group.verbs.map((verb) => `    ${verb.padEnd(verbWidth, ' ')}  ${verbSummary(verb)}`),
+    '',
+  ])
+
   return [
-    'btid — the BTID terminal',
+    `btid ${CLI_VERSION} — the BTID terminal`,
     '',
-    'usage: btid <verb> <path> [data] [--flags]',
+    `usage: ${USAGE_LINE}`,
     '',
+    'A verb is what you do; a path is what you do it to. Nothing is both.',
+    '',
+    'WORDS',
+    ...CONCEPTS.map((concept) => `  ${concept.term.padEnd(termWidth, ' ')}  ${concept.what}`),
+    '',
+    'VERBS',
+    ...verbsByGroup,
     'VERBS × PATHS',
     ...VERB_NAMES.map((verb) => {
       const paths = pathsOf(verb)
-      return `  ${verb.padEnd(verbWidth, ' ')}  ${paths.length === 0 ? '—' : paths.join(' · ')}`
+      return `  ${verb.padEnd(verbWidth, ' ')}  ${paths.length === 0 ? '(no path)' : paths.join(' · ')}`
     }),
     '',
     'PATHS × VERBS',
     ...PATHS.map((path) => `  ${path.padEnd(pathWidth, ' ')}  ${verbsAt(path).join(', ')}`),
     '',
-    'VERBS',
-    ...VERB_NAMES.map((verb) => `  ${verb.padEnd(verbWidth, ' ')}  ${summaryOf(verb)}`),
+    'GLOBAL FLAGS — on every command',
+    ...GLOBAL_HELP.map((flag) => `  ${flagText(flag).padEnd(flagWidth, ' ')}  ${flag.what}`),
     '',
-    'Exit codes: 0 ok, 1 refused, 2 usage. Every command takes --json.',
-    'Run btid help <verb> for its flags and one example.',
+    'EXIT CODES',
+    ...EXIT_CODES.map((entry) => `  ${String(entry.code).padEnd(2, ' ')}  ${entry.when}`),
+    '',
+    'NEXT',
+    '  btid help <verb>   one verb: every usage line, its flags, an example',
+    '  btid help --json   the manifest: every rule with the flags it takes',
+    '  btid plan          a file of commands, run in order against one store',
   ].join('\n')
 }
 
@@ -96,43 +171,72 @@ export const TYPES = [
 ] as const
 
 /**
- * The manifest, version 2: grammar-shaped.
+ * The manifest, version 3: **one entry per rule**, each with the flags *that rule* takes.
  *
- * `version` is this CLI's; `manifest` is the shape's. They are separate numbers on purpose: a change to the CLI that adds a
- * verb moves the first, a change to the manifest that moves a field's meaning moves the second, and a consumer can pin
- * either without being told the other one moved.
+ * Version 2 listed a verb's flags unioned over its paths, which was enough to describe a grammar where every verb meant the
+ * same thing everywhere — and wrong the moment a reader asked "may I pass `--percent` to `edit project/<id>`?". It may not,
+ * and v2 could not say so. Here a verb's `paths[]` carries the usage line and the flags of each shape, so an agent can
+ * check its own command before running it.
  *
- * An agent needs to know which combinations are legal, not just which words exist: `verbs[]` says what each verb applies
- * to, and the `paths[]` index answers the other direction — which verbs are valid at a path.
+ * `version` is this CLI's; `manifest` is the shape's. They move for different reasons, so a consumer can pin either.
  */
 export const manifest = (): unknown => ({
   name: 'btid',
   version: CLI_VERSION,
   manifest: MANIFEST_VERSION,
-  verbs: VERB_NAMES.map((verb) => ({
-    verb,
-    summary: summaryOf(verb),
-    paths: pathsOf(verb),
-    flags: flagsOfVerb(verb),
-    writes: rulesFor(verb).some((rule) => rule.handler.writes === true),
-  })),
+  usage: USAGE_LINE,
+  verbs: VERB_NAMES.map((verb) => {
+    const kind = kindOf(verb)
+    return {
+      verb,
+      summary: verbSummary(verb),
+      kind,
+      writes: kind === 'writes',
+      session: kind === 'session',
+      example: exampleOf(verb) ?? null,
+      paths: rulesFor(verb).map((rule) => ({
+        path: rule.path,
+        usage: rule.handler.usage,
+        flags: flagsOfRule(rule).map((flag) => ({ name: flag.name, value: flag.takes === 'value', what: flag.what })),
+      })),
+    }
+  }),
   paths: PATHS.map((path) => ({ path, verbs: verbsAt(path) })),
+  globals: GLOBAL_HELP.map((flag) => ({ name: flag.name, value: flag.takes === 'value', what: flag.what })),
+  exitCodes: EXIT_CODES.map((entry) => ({ code: entry.code, when: entry.when })),
   types: TYPES,
-  exitCodes: { ok: 0, refused: 1, usage: 2 },
 })
 
-/** `btid help <verb>`: its paths, every usage line, its flags, and one example. */
+/** `btid help <verb>`: what it does to the store, every usage line, its flags with descriptions, and an example. */
 const verbPage = (context: VerbContext, verb: string): number => {
-  context.out.line(`${verb} — ${summaryOf(verb)}`)
-  const paths = pathsOf(verb)
-  context.out.line(`  paths: ${paths.length === 0 ? '(no path)' : paths.join(' · ')}`)
-  for (const rule of rulesFor(verb)) {
-    context.out.line(`  usage: ${rule.handler.usage}`)
-  }
   const flags = flagsOfVerb(verb)
-  if (flags.length > 0) context.out.line(`  flags: ${flags.map((flag) => `--${flag.name}`).join(', ')}`)
+  const width = Math.max(...flags.map((flag) => flagText(flag).length), 0)
+  context.out.line(`${verb} — ${verbSummary(verb)}`)
+  context.out.line(`  ${KIND_WORDS[kindOf(verb)]}`)
+  context.out.line('')
+  // One block per shape: the usage line, then what *that* shape does — `add task/<id>/comment` and
+  // `remove project/<id>/member` are different acts that share a verb.
+  const shapes = rulesFor(verb)
+  for (const rule of shapes) {
+    context.out.line(`  ${rule.handler.usage}`)
+    if (shapes.length > 1) context.out.line(`      ${rule.handler.summary}`)
+  }
+  context.out.line('')
+  if (flags.length === 0) {
+    context.out.line('  FLAGS  none — everything this verb needs is in the path or the data')
+  } else {
+    context.out.line('  FLAGS')
+    for (const flag of flags) context.out.line(`    ${flagText(flag).padEnd(width, ' ')}   ${flag.what}`)
+  }
+
   const example = exampleOf(verb)
-  if (example !== undefined) context.out.line(`  example: ${example}`)
+  if (example !== undefined) {
+    context.out.line('')
+    context.out.line(`  EXAMPLE  ${example}`)
+  }
+  context.out.line('')
+  const globals = GLOBAL_HELP.map((flag) => (flag.takes === 'value' ? `--${flag.name}` : flag.spell ?? `--${flag.name}`))
+  context.out.line('  Every command also takes: ' + globals.join(', '))
   return 0
 }
 

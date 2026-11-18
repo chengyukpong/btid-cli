@@ -297,7 +297,10 @@ export function check(plan: Plan): Plan | { message: string } {
       }
 
     const reads = rule.verb === 'show' || rule.verb === 'whoami'
-    if (rule.handler.writes !== true && !reads) {
+    // A step is a command: one that writes, one that changes the session (`advance`, `impersonate`), or one that reads.
+    // Anything else is a report, and a plan of reports is a file that does nothing.
+    const command = rule.handler.writes === true || rule.handler.session === true
+    if (!command && !reads) {
       return { message: `a plan runs commands; “${rule.verb}” is a report` }
     }
     for (const [index, arg] of step.args.entries()) {
@@ -382,7 +385,10 @@ export async function runPlan(
       return { code: 2, steps: results }
     }
     const { rule } = routed
-    const isRead = rule.handler.writes !== true
+    // Output from a read or a session act goes straight to the terminal — "acting as ivan-petrov" is the point of the step,
+    // and a session act has no commit to print it after. A write's own line is buffered instead, because an uncommitted write
+    // that prints as though it landed is the one lie this runner must not tell.
+    const isRead = rule.handler.writes !== true && rule.handler.session !== true
 
     const buffer: string[] = []
     const sink: Output = isRead

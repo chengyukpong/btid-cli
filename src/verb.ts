@@ -77,6 +77,15 @@ export interface Verb {
   flags?: Readonly<Record<string, 'value' | 'boolean'>>
   /** Reads run without a token when the store can be opened anonymously; writes always need one. */
   writes?: boolean
+  /**
+   * Changes the session rather than the store: the clock (`advance`), or who the writes are attributed to (`impersonate`,
+   * `unimpersonate`).
+   *
+   * A plan may contain one — it is a command, not a report — but it stages no row and commits nothing, so it is neither a
+   * write nor a read. That third kind is the reason this field exists: without it a session verb had to declare
+   * `writes: true` and lie about it, which is exactly what the plan runner and the manifest both read.
+   */
+  session?: boolean
   /** Answers about the binary or the cache, so it opens no store at all. */
   noStore?: boolean
   run(context: VerbContext): Promise<number>

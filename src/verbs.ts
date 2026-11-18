@@ -1633,10 +1633,9 @@ const storeAdvance: Verb = {
   name: 'advance store',
   summary: "Move the store's clock forward, so the work that follows is stamped with that day.",
   usage: 'btid advance store <instant> [--json]',
-  // A write, because a plan only runs commands: a report is refused as a step ("a plan runs commands"). Its own line is
-  // therefore quiet inside a plan, which is right — the transcript already says `ok 4 advance store`, and what the change
-  // did is visible in the rows the following steps write.
-  writes: true,
+  // A session act, not a write: it stages no row and commits nothing. It used to declare `writes: true` so that a plan
+  // would accept it — the lie that `session` exists to end.
+  session: true,
   async run(context) {
     const when = context.args[0]
     if (when === undefined || when.trim() === '') {
@@ -1659,9 +1658,9 @@ const personImpersonate: Verb = {
   name: 'impersonate person/<id>',
   summary: 'Act as somebody on the roster: every write after this is theirs. The manager may.',
   usage: 'btid impersonate person/<id> [--json]',
-  // A write in the grammar's sense although it stages no row: it changes what the rows *after* it record, which is the whole
-  // reason a seeded plan needs it. Nothing is committed for it, and a plan's stream of commands simply continues.
-  writes: true,
+  // A session act: it changes what the rows *after* it record, which is the whole reason a seeded plan needs it. Nothing is
+  // committed for it, and a plan's stream of commands simply continues.
+  session: true,
   async run(context) {
     const id = context.args[0]
     if (id === undefined) return usage('btid impersonate person/<id>', context.out, context.json)
@@ -1681,7 +1680,7 @@ const unimpersonate: Verb = {
   usage: 'btid unimpersonate [--json]',
   // Pathless: the act ends an impersonation rather than addressing a row, which is why it is a verb here and not a "stop"
   // path under `impersonate`. The tree holds nouns; "stop" was the only mode in it.
-  writes: true,
+  session: true,
   async run(context) {
     context.store.stopImpersonating()
     const actor = context.store.actor

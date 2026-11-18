@@ -937,9 +937,13 @@ describe('btid', () => {
     assert.match(lines.text, /ls +task/)
     lines.written.length = 0
     assert.equal(await btid(['help', '--json']), 0)
-    const manifest = lines.json[0] as { verbs: { verb: string }[]; exitCodes: unknown }
+    const manifest = lines.json[0] as { verbs: { verb: string }[]; exitCodes: { code: number; when: string }[] }
     assert.ok(manifest.verbs.some((verb) => verb.verb === 'edit'))
-    assert.deepEqual(manifest.exitCodes, { ok: 0, refused: 1, usage: 2 })
+    // The codes a script branches on, published rather than left in prose.
+    assert.deepEqual(
+      manifest.exitCodes.map((entry) => entry.code),
+      [0, 1, 2, 3, 4, 5],
+    )
   })
 
   it('refuses an old spelling with the form that replaced it', async () => {
@@ -963,34 +967,63 @@ describe('btid', () => {
     assert.match(lines.text, /promote takes no attributes; edit task\/alpha-a1b2 --status done/)
   })
 
-  it('publishes manifest version 2, with both directions of the grammar', async () => {
+  it('publishes manifest version 3, with the flags of each path rather than a verb’s whole union', async () => {
     assert.equal(await btid(['help', '--json']), 0)
     const manifest = lines.json[0] as {
       manifest: number
-      verbs: { verb: string; paths: string[]; flags: unknown[]; writes: boolean }[]
+      usage: string
+      verbs: {
+        verb: string
+        summary: string
+        kind: string
+        writes: boolean
+        session: boolean
+        paths: { path: string; usage: string; flags: { name: string; value: boolean }[] }[]
+      }[]
       paths: { path: string; verbs: string[] }[]
+      globals: { name: string; what: string }[]
+      exitCodes: { code: number; when: string }[]
     }
-    assert.equal(manifest.manifest, 2)
+    assert.equal(manifest.manifest, 3)
     const edit = manifest.verbs.find((verb) => verb.verb === 'edit')!
-    assert.deepEqual(edit.paths, ['task/<id>', 'project/<id>', 'person/<id>'])
+    assert.deepEqual(edit.paths.map((shape) => shape.path), ['task/<id>', 'project/<id>', 'person/<id>'])
     assert.equal(edit.writes, true)
-    assert.ok(edit.flags.length > 0)
+    assert.equal(edit.session, false)
+
+    // The reason v3 exists: a consumer can tell which flags belong to *this* shape. `--percent` is a task's field, and the
+    // v2 manifest's unioned list said it belonged to `edit` — all three of its shapes.
+    const taskShape = edit.paths.find((shape) => shape.path === 'task/<id>')!
+    const projectShape = edit.paths.find((shape) => shape.path === 'project/<id>')!
+    assert.ok(taskShape.flags.some((flag) => flag.name === 'percent'))
+    assert.ok(!projectShape.flags.some((flag) => flag.name === 'percent'), 'a project has no percent')
+    assert.ok(taskShape.usage.startsWith('btid edit task/<id>'))
+
+    // And the session kind is visible, instead of being reported as a write that stages nothing.
+    const impersonate = manifest.verbs.find((verb) => verb.verb === 'impersonate')!
+    assert.equal(impersonate.session, true)
+    assert.equal(impersonate.writes, false)
+
     const rowPath = manifest.paths.find((entry) => entry.path === 'task/<id>')!
-      assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'remove'])
-      assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
-      assert.equal(manifest.paths.length, 15, 'the path tree is indexed once')
+    assert.deepEqual(rowPath.verbs, ['show', 'edit', 'promote', 'demote', 'remove'])
+    assert.ok(manifest.verbs.some((verb) => verb.verb === 'demote'), 'the ladder has both directions')
+    assert.equal(manifest.paths.length, 15, 'the path tree is indexed once')
+
+    // The page's own scaffolding is in the manifest too, so an agent gets the exit codes without scraping prose.
+    assert.ok(manifest.exitCodes.some((entry) => entry.code === 5 && /no store/.test(entry.when)))
+    assert.ok(manifest.globals.some((flag) => flag.name === 'store'))
+    assert.equal(manifest.usage, 'btid <verb> <path> [data] [--flags]')
   })
 
   it('says which btid it is, and which schema it speaks', async () => {
     assert.equal(await btid(['version']), 0)
-    assert.match(lines.text, /^btid \d+\.\d+\.\d+ · btid-core schema v1 · manifest 2/)
+    assert.match(lines.text, /^btid \d+\.\d+\.\d+ · btid-core schema v1 · manifest 3/)
 
     lines.written.length = 0
     assert.equal(await btid(['version', '--json']), 0)
       assert.deepEqual(lines.json[0], {
         btid: CLI_VERSION,
         coreSchema: EXPECT,
-        manifest: 2,
+        manifest: 3,
         // Logging is on by default, so the command reports the file it wrote — a workspace of the test's own.
         log: { enabled: true, path: join(workspace, 'btid.log') },
       })
@@ -1022,7 +1055,7 @@ describe('btid', () => {
       types: { type: string; fields: { name: string; type: string; required: boolean; values?: string[] }[] }[]
     }
     assert.equal(manifest.version, CLI_VERSION)
-    assert.equal(manifest.manifest, 2)
+    assert.equal(manifest.manifest, 3)
     const task = manifest.types.find((entry) => entry.type === 'task')!
     const names = task.fields.map((field) => field.name)
     // The fields an agent is most likely to ask for, and one that proves the list is the schema's rather than a guess.
