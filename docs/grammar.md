@@ -11,7 +11,7 @@ Why this shape: **verbs are a small closed set, paths are data.** Nothing is bot
 the namespace problem a path-first grammar has, and removes the "default verb" question entirely, because a verb is required
 by position.
 
-## Verbs — nineteen, no two-word ones
+## Verbs — twenty, no two-word ones
 
 | verb | what it does | paths it takes |
 |---|---|---|
@@ -19,6 +19,7 @@ by position.
 | `show` | read one — its own fields; `--details` adds what is beside it | `task/<id>` · `project/<id>` · `person/<id>` · `task/<id>/step/<step-id>` · `cache` |
 | `new` | create — the store mints the id | `task` · `project` · `person` · `store` · `task/<id>/step` |
 | `edit` | change fields | `task/<id>` · `project/<id>` · `person/<id>` |
+| `advance` | move the store's clock forward, so the steps after it are stamped with that day | `store` |
 | `promote` | one step up the ladder: backlog → todo → in progress → done — takes no attributes | `task/<id>` |
 | `demote` | one step back down the ladder — takes no attributes | `task/<id>` |
 | `archive` | tag the store, then delete a project and its work — there is no unarchive | `project/<id>` |
@@ -170,6 +171,26 @@ means. `$task` alone is refused — a result is not a value.
 | a verb unknown at that path | the verbs valid **at that path**, not the whole registry |
 
 Every refusal names what to type instead. A grammar nobody can guess is a grammar that has to teach, and this is where it does.
+
+## Seeding a history
+
+`advance store <instant>` moves the store's clock; every step after it is stamped with that moment. It is the manager's to
+move, and — after the first move — forward only. The first move is the exception on purpose: a store seeded in November
+about September has to begin in the past.
+
+```
+advance store 2026-09-11T09:12:00+08:00
+let t = new task --project alpha --title "Cut the release"
+edit task/$t.id --assignee ivan --start 2026-09-14 --end 2026-09-18 --estimate 3 --dod "It ships."
+advance store 2026-09-12T10:40:00+08:00
+promote task/$t.id
+advance store 2026-09-13T14:05:00+08:00
+new task/$t.id/step --name "Write the notes"
+```
+
+The rows and their activity days follow the clock — six days of work become six records rather than one with an edit count.
+The **commits** do not: the engine stamps them when they are written, so a store seeded today shows today's commits
+containing September's work. Backdating a commit would be rewriting history, which is not what a seed is for.
 
 ## What changes, and what it costs
 

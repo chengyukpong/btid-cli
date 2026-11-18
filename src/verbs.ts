@@ -1573,6 +1573,32 @@ const storeInit: Verb = {
   },
 }
 
+const storeAdvance: Verb = {
+  name: 'advance store',
+  summary: "Move the store's clock forward, so the work that follows is stamped with that day.",
+  usage: 'btid advance store <instant> [--json]',
+  // A write, because a plan only runs commands: a report is refused as a step ("a plan runs commands"). Its own line is
+  // therefore quiet inside a plan, which is right — the transcript already says `ok 4 advance store`, and what the change
+  // did is visible in the rows the following steps write.
+  writes: true,
+  async run(context) {
+    const when = context.args[0]
+    if (when === undefined || when.trim() === '') {
+      return usage('btid advance store 2026-09-12T10:40:00+08:00', context.out, context.json)
+    }
+
+    const result = context.store.advanceTo(when)
+    if (!result.ok) return refusal(result, context.out, context.json)
+
+    // Nothing is staged and nothing is committed: the pin lives in this process's store, so the verb earns its keep as a
+    // step inside a plan — the one place where a sequence of commands shares a store. On its own it changes nothing that
+    // outlives the command, which the summary says by calling it "the work that follows".
+    if (context.json) context.out.json({ at: result.value.at })
+    else context.out.line(`clock  ${result.value.at}`)
+    return 0
+  },
+}
+
 const version: Verb = {
   name: 'version',
   summary: 'Which btid this is, and which schema it speaks.',
@@ -1638,6 +1664,7 @@ export const HANDLERS = {
   cacheClear,
   storeInit,
   storeWhoami,
+  storeAdvance,
   plan,
   version,
 } as const

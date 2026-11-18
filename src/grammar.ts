@@ -37,7 +37,7 @@ const { personLs, personShow, personNew, personEdit, personRemove } = HANDLERS
 const { labelLs, labelAdd, labelRemove } = HANDLERS
 const { stepLs, stepShow, stepNew, stepMove, stepRename, stepDone, stepUndo, stepRemove } = HANDLERS
 const { cacheShow, cacheClear } = HANDLERS
-const { storeInit, storeWhoami } = HANDLERS
+const { storeInit, storeWhoami, storeAdvance } = HANDLERS
 const { plan, version } = HANDLERS
 
 /**
@@ -79,6 +79,14 @@ export const RULES: readonly Rule[] = [
   { verb: 'new', path: 'project', handler: projectNew, args: place },
   { verb: 'new', path: 'person', handler: personNew, args: place },
   { verb: 'new', path: 'store', handler: storeInit, args: place },
+  // Seeding a history: everything after this step is stamped with the day the plan says it happened.
+  {
+    verb: 'advance',
+    path: 'store',
+    handler: storeAdvance,
+    args: place,
+    example: 'btid advance store 2026-09-12T10:40:00+08:00',
+  },
   { verb: 'new', path: 'task/<id>/step', handler: stepNew, args: place },
 
   { verb: 'edit', path: 'task/<id>', handler: taskEdit, args: place, example: 'btid edit task/alpha-n7qk --estimate 4 --dod "Both columns line up."' },
