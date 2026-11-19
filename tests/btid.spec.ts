@@ -4,6 +4,9 @@ import { EXPECT } from 'btid-core'
 import { CLI_VERSION } from '../src/version'
 import { run } from '../src/cli'
 import { consoleOutput } from '../src/output'
+// The snapshot file is gzipped above 2 KB and detected by magic bytes, so a test that reads one must decode it the way the
+// product does rather than assume JSON on disk.
+import { decodeSnapshot } from '../src/snapshot-codec'
 import { FakeClient, Lines } from './support'
 
 // The CLI's whole claim is that it holds no rules: every refusal below is the core's sentence, and the exit code is the
@@ -1186,13 +1189,13 @@ describe('btid', () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     assert.equal(await btid(['whoami']), 0)
     const name = readdirSync(workspace).find((entry) => entry.endsWith('.snapshot.json'))!
-    const before = JSON.parse(readFileSync(join(workspace, name), 'utf8')) as { commit: string }
+    const before = decodeSnapshot(readFileSync(join(workspace, name))) as { commit: string }
 
     assert.equal(await btid(['new', 'task', '--project', 'alpha', '--title', 'After a write']), 0)
 
     const survivors = readdirSync(workspace).filter((entry) => entry.endsWith('.snapshot.json'))
     assert.equal(survivors.length, 1, 'the file is still there')
-    const after = JSON.parse(readFileSync(join(workspace, survivors[0]!), 'utf8')) as { commit: string }
+    const after = decodeSnapshot(readFileSync(join(workspace, survivors[0]!))) as { commit: string }
 
     // The fake client's commits are c1, c2, …: a refresh records the one the write produced, not the one before it.
     assert.equal(before.commit, 'c0')
@@ -1239,7 +1242,7 @@ describe('btid', () => {
     const { readdirSync, readFileSync } = await import('node:fs')
     assert.equal(await btid(['whoami']), 0)
     const path = join(workspace, readdirSync(workspace).find((name) => name.endsWith('.snapshot.json'))!)
-    const before = JSON.parse(readFileSync(path, 'utf8')) as { commit: string }
+    const before = decodeSnapshot(readFileSync(path)) as { commit: string }
 
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
@@ -1311,7 +1314,7 @@ describe('btid', () => {
     assert.equal(code, 0, 'the command still works: the store is loaded')
     const survivors = readdirSync(workspace).filter((entry) => entry.endsWith('.snapshot.json'))
     assert.equal(survivors.length, 1, 'and a fresh snapshot replaced it')
-    const fresh = JSON.parse(readFileSync(join(workspace, survivors[0]!), 'utf8')) as { commit: string }
+    const fresh = decodeSnapshot(readFileSync(join(workspace, survivors[0]!))) as { commit: string }
     assert.equal(typeof fresh.commit, 'string')
   })
 
