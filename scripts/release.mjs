@@ -58,6 +58,12 @@ if (!existsSync(packed)) {
 // 2. The stable copy. Same bytes, a name that does not change.
 copyFileSync(packed, join(staging, 'btid-cli.tgz'))
 
+// 2b. The record in the repository. `release/` used to be filled by hand, which is how 0.21.0 came to hold a 1.4 MB
+//     pre-bundle build while the release asset was the 149 KB bundle: the folder said one thing, the release another.
+//     Copying here is what makes the two the same bytes.
+mkdirSync(join(root, 'release'), { recursive: true })
+copyFileSync(packed, join(root, 'release', `btid-cli-${version}.tgz`))
+
 // 3. The release. `gh release create` fails when the tag already exists, which is the case when a release is being
 //    refreshed (a rebuilt tarball, a fixed note), so that path adds assets instead of refusing.
 const remote = capture('git', ['remote', 'get-url', 'origin']).replace(/\.git$/, '')

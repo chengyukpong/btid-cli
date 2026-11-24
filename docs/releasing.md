@@ -56,3 +56,20 @@ npm i -g <the latest URL> && btid --help                                        
 - `v0.21.0` — first release. It shipped a 1.5 MB tarball because `bundleDependencies` carried zod's whole package; the
   same version was re-cut after the esbuild bundle landed, which is why the *release* was refreshed rather than given a new
   version number.
+
+## The record in the repository
+
+`release/` mirrors what shipped: one tarball per version, and the script writes it (`npm run release` copies the packed
+tarball there), so the folder and the assets are the same bytes.
+
+They were not always. `release/btid-cli-0.21.0.tgz` held a **1.4 MB** build packed before the package became one bundle,
+while the asset of the same name was the **149 KB** bundle. A folder that names a version is a claim about that version, so
+it is packed from the tag, not from whatever the working tree looked like at the time:
+
+```
+git worktree add ../btid-cli-wt-<version> v<version>
+cd ../btid-cli-wt-<version> && npm install && npm run build && npm pack
+```
+
+0.21.0 was repacked that way (3 files, 149 KB — `dist/bin.bundle.js`, `package.json`, `README.md`), and 0.22.0 was packed
+from the working tree while it was the version under release.
