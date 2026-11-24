@@ -36,6 +36,19 @@ btid --help
 No token, no registry, no `file:` dependencies: `btid-core`, `githubdb` and `zod` are tree-shaken into `dist/bin.bundle.js`
 at build time (`npm run build`), so installing adds exactly one package.
 
+`btid version` also says when a newer release exists — it asks GitHub at most once a day, keeps the answer beside the
+snapshot cache, and prints the install command only when there is something to install:
+
+```
+$ btid version
+btid 0.21.0 · btid-core schema v3 · manifest 3
+latest  0.22.0 is available (this copy is 0.21.0)
+        npm i -g https://github.com/chengyukpong/btid-cli/releases/latest/download/btid-cli.tgz
+```
+
+`--json` never asks (machine output stays offline and unchanged), `--fresh` asks again, and `BTID_NO_UPDATE_CHECK=1` turns
+the check off entirely.
+
 `releases/latest/download/<name>` resolves the newest release but not a newest filename — which is why every release carries
 the same bytes twice: `btid-cli-<version>.tgz` as the record, and `btid-cli.tgz` as the moving copy. `npm run release` cuts a
 release with both; `docs/releasing.md` is the rule.

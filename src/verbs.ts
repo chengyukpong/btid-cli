@@ -1,9 +1,11 @@
+import { join } from 'node:path'
 import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from 'btid-core'
 import type { BoardSort, CreateProjectInput, CreateTaskInput, Project, Store, Task, TaskHandle, User } from 'btid-core'
 import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
 import { dayOf, describeStore, rowFields, table, wrapText } from './output'
 import { CLI_VERSION, MANIFEST_VERSION, versionLine } from './version'
+import { checkForUpdate, updateNotice } from './update'
 import type { Column, Field } from './output'
 import { fieldsOf, printRows, refusal, usage, type Verb, type VerbContext } from './verb'
 
@@ -1700,7 +1702,7 @@ const unimpersonate: Verb = {
 
 const version: Verb = {
   name: 'version',
-  summary: 'Which btid this is, and which schema it speaks.',
+  summary: 'Which btid this is, which schema it speaks, and whether a newer release exists.',
   usage: 'btid version [--json]',
   noStore: true,
   async run(context) {
@@ -1710,6 +1712,17 @@ const version: Verb = {
       return 0
     }
     context.out.line(line)
+
+    // Once a day — the answer is cached under the same root as the snapshots, and a failure is cached too, so an offline
+    // machine pays for the attempt once rather than on every command. `--json` never reaches this: machine output stays
+    // offline, instant and unchanged. `--fresh` asks again.
+    const reading = await checkForUpdate({
+      current: CLI_VERSION,
+      cachePath: join(context.cacheDir, 'update.json'),
+      fresh: context.flags['fresh'] === true,
+    })
+    for (const notice of updateNotice(reading)) context.out.line(notice)
+
     // Where the log is going, said out loud: "there is no log" and "the log is somewhere else" look identical otherwise.
     context.out.line(
       context.logTarget.enabled && context.logTarget.path !== null

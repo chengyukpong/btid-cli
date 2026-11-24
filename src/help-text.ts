@@ -82,7 +82,7 @@ export const GLOBAL_HELP: readonly FlagHelp[] = [
   { name: 'log-file', takes: 'value', what: '<path> — write this command’s log there' },
   { name: 'no-log', takes: 'none', what: 'do not write a log line for this command' },
   { name: 'help', takes: 'none', what: 'print help for this verb, and touch no store' },
-  { name: 'version', takes: 'none', what: 'print the version', spell: '-v, --version' },
+  { name: 'version', takes: 'none', what: 'print the version, and whether a newer release exists (checked once a day)', spell: '-v, --version' },
 ]
 
 /**
@@ -127,7 +127,7 @@ export const VERB_HELP: Readonly<Record<string, string>> = {
   tick: 'Tick a step.',
   unimpersonate: 'Stop acting as somebody: the roster account comes back.',
   untick: 'Untick a step.',
-  version: 'Which btid this is, and which schema it speaks.',
+  version: 'Which btid this is, which schema it speaks, and whether a newer release exists.',
   whoami: 'Say which store this session points at, and who it acts as.',
 }
 
