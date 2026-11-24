@@ -1,4 +1,4 @@
-# The store is switched, not flagged
+# The store is switched, and a plan may name its own
 
 - **Status:** backlog
 - **Created:** 2026-11-25T02:10:00+08:00
@@ -7,90 +7,62 @@
 
 ## Description
 
-Proposed by the user, as a grammar change:
+The store used to be resolvable three ways — `--store`, `BTID_STORE`, the saved config file — and **any** successful command
+wrote the resolved location back to the config. So `--store` looked like a per-command flag and behaved as a permanent
+switch: a flag that persists is a lie about what it does.
+
+Three changes, settled with the user over two rounds:
 
 ```
-init store yuk-org/btid-data3
-switch store yuk-org/btid-data4
+btid init store yuk-org/btid-data3          # create the store in that repository, and remember it
+btid switch store yuk-org/btid-data4        # point this machine at it, and remember it
+btid plan seed.btid --store yuk-org/test    # run this plan against that store, remembering nothing
 ```
 
-and delete the global `--store` flag.
+`--store` and `BTID_STORE` are gone everywhere else. `new store` is renamed `init store`.
 
-Today the store is resolved from three sources — `--store`, `BTID_STORE`, `~/.config/btid/config.json` — and **any**
-successful command writes the resolved location back to the config file, so `--store` reads as a per-command flag but
-behaves as a permanent switch. That is the mismatch: a flag looks like a side trip, and it isn't.
+## Why `plan --store` instead of a mid-plan `switch`
 
-`switch store` would make the persistence the verb's whole job, which is the same shape `advance store` and
-`impersonate person/<id>` already have: a session act (`session: true`), no rows staged, nothing committed, and it earns
-its place in a plan.
+The first draft had `switch store x --session` as a plan step, which makes a store boundary in the middle of a run: deferred
+writes (`--commit=end`) would have to be flushed at the boundary, and `let` bindings would have to be tagged with the store
+that minted them so a cross-store reference could be refused. Real machinery for a case that does not need it.
 
-## The shape
+A plan runs against **one** store, so let the invocation name it:
 
-| Verb | Path | Argument | Effect |
-|---|---|---|---|
-| `init` | `store` | `owner/repo[@ref]` | create a store in that repository (config + roster with you as manager) |
-| `switch` | `store` | `owner/repo[@ref]` | point this session at it, and remember it |
-| `whoami` | — | — | say which store answered, and from where |
+- one store per run, chosen at the edge — no boundary, no flush rule, no cross-store bindings;
+- **the plan file stays portable**: a file of commands must not name a repository, or the same text means different work in
+  different hands;
+- `--store` survives as a **single-purpose flag on `plan`**, which is the narrowest possible home for it;
+- nothing is remembered: the config file has one writer (`switch store`) and one creator (`init store`).
 
-- Both take the target as a **positional** argument, like `advance store <instant>`, rather than a flag: it is the verb's
-  object, not a modifier of some other verb.
-- `init store` replaces `new store`. "new" reads as "create a row named store"; `init` says what it initialises. The old
-  spelling should be refused with a message naming the new one — the same hard-cut rule `docs/grammar.md` already carries
-  for `store init` → `new store`, which this would reverse.
-- `switch store` **opens the store before saving it**: one `head()` request. A typo must not brick every later command by
-  writing a location that does not open.
+## Rules
 
-## About deleting `--store`
-
-The case for: with the flag gone, "which store" can only change through a verb that says so, and no command can quietly
-read one store and write another. That matches the existing rule that there is no default store at all.
-
-**Decided (user, 2026-11-25):** the flag goes, and the one case that needed it — a *plan* that works across stores — gets its
-own spelling:
-
-```
-switch store yuk-org/btid-test --session
-```
-
-`--session` means "for the rest of this run, and nothing remembered". Without it, `switch store` is the persisting act that
-writes `~/.config/btid/config.json`. `BTID_STORE` goes too: one way to say it, one way to remember it.
-
-## What `--session` actually asks for
-
-A plan runs every step against **one** store: `cli.ts` resolves the location and calls `openStore` once, before `dispatch`,
-and `runPlan` threads that `context.store` through each step. So `switch store --session` inside a plan is a **store
-boundary**, and two questions come with it.
-
-1. **What happens to uncommitted writes at the boundary?** A plan may run with `--commit=end`, which defers every write
-   into one commit at the last step. Switching stores mid-way has to flush the old store first — a boundary is a commit
-   point (`--commit=each` semantics for that segment) — or refuse the switch when writes are pending. I would flush: a
-   plan that changes stores is two pieces of work, and half of it cannot ride a commit into a repository it does not
-   belong to.
-2. **Do `let` bindings survive the switch?** They are ids from the old store. Referencing `$t.id` after switching would
-   write a row id into a different repository — the exact "wrong store" failure this whole change is about. I would tag
-   each binding with the store it came from and refuse a cross-store reference by name, at plan-check time, rather than
-   let it fail inside the engine.
-
-Outside a plan, `switch store … --session` has nothing to be a session *for*: one command is one process. Refused with
-guidance (`--session` is a plan step; drop it to remember the store), rather than accepted as a no-op.
-
+- **`init store owner/repo[@ref]`** — creates the repository's store: `githubdb.json` at this build's version, then
+  `people.json` with the caller as manager. Refuses a repository that already holds a store. Remembers it.
+- **`switch store owner/repo[@ref]`** — **opens** it before saving (one `head()`), so a typo cannot brick every later
+  command by writing a location that does not open. Nothing else writes the config's store.
+- **`plan <file> --store owner/repo[@ref]`** — resolves to that store for the whole run and saves nothing. The store is
+  validated before step 1, on the runner's existing rule that a flag the shape cannot do without is refused before
+  anything starts: a typo must fail at step zero, not at step fourteen.
+- **`--session` is not needed** and should never ship: it existed only to express the mid-plan switch this replaces.
 
 ## What breaks
 
-- `btid new store` and `--store` — both refused with the replacement named, not silently accepted (the migration rule in
-  `docs/grammar.md`).
-- The config-file write moves out of `rememberLogin` into `switch store`; the login/token-fingerprint caching stays where it
-  is.
-- `resolveStore` loses its flag branch, and `BTID_STORE` stops being written back. Existing configs keep working: a saved
-  store is still the saved store.
-- Version: a breaking grammar change, so 0.22.0, and the docs table gains the two rows.
+- `--store` on every other verb, `BTID_STORE`, and `new store` — refused with the replacement named, not silently accepted
+  (the hard-cut rule `docs/grammar.md` already carries).
+- The config write moves out of `rememberLogin` into `switch store` / `init store`; the login + token-fingerprint caching
+  stays where it is.
+- `resolveStore` loses its flag and env branches; a saved store is still a saved store, so existing configs keep working.
+- Version: **0.22.0**, a breaking grammar change. Two rows for the migration table in `docs/grammar.md`.
 
 ## How to verify
 
 ```
-btid init store yuk-org/btid-data3          # manager chengyukpong, people 1, projects 0
-btid switch store yuk-org/btid-data4        # validates, then remembers
-btid whoami                                  # (file), not (flag)
-BTID_STORE=yuk-org/btid-data3 btid whoami    # (env), and the config still points at data4 afterwards
-btid ls task --store yuk-org/other           # refused: usage, naming `switch store`
+btid init store yuk-org/btid-data3           # manager you, people 1, projects 0; remembered
+btid switch store yuk-org/btid-data4         # validated by opening, then saved
+btid whoami                                  # (file) — and yuk-org/btid-data4
+btid plan seed.btid --store yuk-org/btid-test  # runs there, config untouched afterwards
+btid plan seed.btid --store yuk-org/typo     # refused before step 1
+btid ls task --store yuk-org/btid-test       # usage: --store belongs to plan; use switch store
+BTID_STORE=yuk-org/x btid whoami             # ignored — no env source any more
 ```
