@@ -19,6 +19,27 @@ can trust.
 
 Nothing is re-implemented here. A verb is a thin parse of arguments, one call, and output.
 
+## Install
+
+The package is one file with no dependencies, published as a GitHub release asset rather than to a registry:
+
+```
+# the newest release — the asset name does not change between versions
+npm i -g https://github.com/chengyukpong/btid-cli/releases/latest/download/btid-cli.tgz
+
+# or one version, pinned
+npm i -g https://github.com/chengyukpong/btid-cli/releases/download/v0.21.0/btid-cli-0.21.0.tgz
+
+btid --help
+```
+
+No token, no registry, no `file:` dependencies: `btid-core`, `githubdb` and `zod` are tree-shaken into `dist/bin.bundle.js`
+at build time (`npm run build`), so installing adds exactly one package.
+
+`releases/latest/download/<name>` resolves the newest release but not a newest filename — which is why every release carries
+the same bytes twice: `btid-cli-<version>.tgz` as the record, and `btid-cli.tgz` as the moving copy. `npm run release` cuts a
+release with both; `docs/releasing.md` is the rule.
+
 ## Signing in
 
 No browser relay, no GitHub App: a token from `gh auth token` when `gh` is signed in, otherwise a device flow so the CLI
