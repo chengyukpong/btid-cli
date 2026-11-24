@@ -1,9 +1,9 @@
 # `btid version` says a newer release exists
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-25T01:05:00+08:00
-- **Finished:** 2026-11-25T01:40:00+08:00
-- **Approved:** —
+- **Finished:** 2026-11-25T03:50:00+08:00
+- **Approved:** 2026-11-25T03:50:00+08:00
 
 ## Description
 

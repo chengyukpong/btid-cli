@@ -1,9 +1,9 @@
 # The release has a latest URL
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-25T00:55:00+08:00
-- **Finished:** 2026-11-25T01:15:00+08:00
-- **Approved:** —
+- **Finished:** 2026-11-25T03:50:00+08:00
+- **Approved:** 2026-11-25T03:50:00+08:00
 
 ## Description
 

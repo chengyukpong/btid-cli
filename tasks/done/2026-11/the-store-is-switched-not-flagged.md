@@ -1,9 +1,9 @@
 # The store is switched, and a plan may name its own
 
-- **Status:** backlog
+- **Status:** done
 - **Created:** 2026-11-25T02:10:00+08:00
-- **Finished:** —
-- **Approved:** —
+- **Finished:** 2026-11-25T03:50:00+08:00
+- **Approved:** 2026-11-25T03:50:00+08:00
 
 ## Description
 

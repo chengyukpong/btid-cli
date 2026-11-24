@@ -1,9 +1,9 @@
 # The package ships one file
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-24T23:40:00+08:00
-- **Finished:** 2026-11-24T23:58:00+08:00
-- **Approved:** —
+- **Finished:** 2026-11-25T03:50:00+08:00
+- **Approved:** 2026-11-25T03:50:00+08:00
 
 ## Description
 
