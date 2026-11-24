@@ -159,21 +159,23 @@ One file, one process, one store. A plan is a list of steps run in order — cre
 step produced usable by the next one:
 
 ```
-# seed.btid
-let ivan  = person new ivan --name Ivan
-let gamma = project new gamma "Gamma" --start 2026-11-03 --end 2026-12-18
-let task  = task new --project $gamma.id --title "First task"
-            task edit $task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."
-            task promote $task.id
+# seed.btid — one step per line, in the same words you would type
+let ivan  = new person --handle ivan --name Ivan
+let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18
+let task  = new task --project $gamma.id --title "First task"
+            edit task/$task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."
+            promote task/$task.id
 ```
+
+`btid help plan` prints the same grammar, so the file format is one command away rather than one document away.
 
 ```console
 $ btid plan seed.btid                 # one commit for all five steps
-ok   1  person new
-ok   2  project new
-ok   3  task new
-ok   4  task edit
-ok   5  task promote
+ok   1  new person
+ok   2  new project
+ok   3  new task
+ok   4  edit task/$task.id
+ok   5  promote task/$task.id
 5 steps, 5 ok, 0 refused
 ```
 

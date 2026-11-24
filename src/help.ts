@@ -15,6 +15,7 @@ import {
   EXIT_CODES,
   FLAG_HELP,
   GLOBAL_HELP,
+  PLAN_FILE,
   USAGE_LINE,
   VERB_GROUPS,
   VERB_HELP,
@@ -52,6 +53,18 @@ const KIND_WORDS: Record<Kind, string> = {
   session: 'CHANGES THE SESSION — nothing staged, nothing committed',
   binary: 'ABOUT THE BINARY OR THE CACHE — needs no store',
 }
+
+/**
+ * The line under a verb's name.
+ *
+ * `plan` writes but takes no `--dry-run`: it stages a whole file and commits at the end, and what it offers instead is
+ * `--preview`, which runs nothing at all. The generic WRITES sentence promised a flag the verb refuses — the first thing
+ * anybody tries, and the first thing that fails.
+ */
+const kindWords = (verb: string): string =>
+  verb === 'plan'
+    ? 'WRITES — one commit at the end; --preview reads the file and runs nothing'
+    : KIND_WORDS[kindOf(verb)]
 
 /** One rule's flags, described. Order is the handler's, so `edit` lists its fields in the order the row holds them. */
 const flagsOfRule = (rule: Rule): FlagHelp[] =>
@@ -194,6 +207,8 @@ export const manifest = (): unknown => ({
       writes: kind === 'writes',
       session: kind === 'session',
       example: exampleOf(verb) ?? null,
+      // `plan`'s argument is a file, and a file needs its grammar in the manifest too: an agent reads this, not `docs/`.
+      ...(verb === 'plan' ? { file: PLAN_FILE } : {}),
       paths: rulesFor(verb).map((rule) => ({
         path: rule.path,
         usage: rule.handler.usage,
@@ -212,7 +227,7 @@ const verbPage = (context: VerbContext, verb: string): number => {
   const flags = flagsOfVerb(verb)
   const width = Math.max(...flags.map((flag) => flagText(flag).length), 0)
   context.out.line(`${verb} — ${verbSummary(verb)}`)
-  context.out.line(`  ${KIND_WORDS[kindOf(verb)]}`)
+  context.out.line(`  ${kindWords(verb)}`)
   context.out.line('')
   // One block per shape: the usage line, then what *that* shape does — `add task/<id>/comment` and
   // `remove project/<id>/member` are different acts that share a verb.
@@ -227,6 +242,17 @@ const verbPage = (context: VerbContext, verb: string): number => {
   } else {
     context.out.line('  FLAGS')
     for (const flag of flags) context.out.line(`    ${flagText(flag).padEnd(width, ' ')}   ${flag.what}`)
+  }
+
+  // A plan is the one verb whose input is a file, so its page has to teach the file: the grammar, then a whole example that
+  // runs. Without this the page named `seed.btid` and never said what a `seed.btid` looks like.
+  if (verb === 'plan') {
+    context.out.line('')
+    context.out.line('  FILE')
+    for (const line of PLAN_FILE.grammar) context.out.line(`    ${line}`)
+    context.out.line('')
+    context.out.line('  A WHOLE FILE')
+    for (const line of PLAN_FILE.example) context.out.line(`    ${line}`)
   }
 
   const example = exampleOf(verb)

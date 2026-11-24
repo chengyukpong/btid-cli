@@ -75,6 +75,14 @@ export interface Verb {
   usage: string
   /** Named flags, with whether they take a value. Anything else is a usage error. */
   flags?: Readonly<Record<string, 'value' | 'boolean'>>
+  /**
+   * The flags this shape cannot do without.
+   *
+   * Said here as well as checked in `run`, so a **plan** can be told before the first request: a plan steps through twenty
+   * commands, and finding out at step fourteen that `new task` needed `--project` costs the whole file. `run` keeps its own
+   * check — it is the one that matters when somebody types a single command — and this one exists to fail earlier.
+   */
+  needs?: readonly string[]
   /** Reads run without a token when the store can be opened anonymously; writes always need one. */
   writes?: boolean
   /**

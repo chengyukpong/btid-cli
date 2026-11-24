@@ -1,8 +1,8 @@
 # A plan file's grammar is not in `btid help`
 
-- **Status:** backlog
+- **Status:** in-progress
 - **Created:** 2026-11-24T17:02:00+08:00
-- **Finished:** —
+- **Finished:** 2026-11-24T17:24:00+08:00
 - **Approved:** —
 
 ## Description
@@ -53,18 +53,32 @@ one is what is missing.
 
 ## Steps
 
-- [ ] `btid help plan` (and the same node in `help --json`) prints the **file grammar**: `#` comments, `let <name> = <verb>
-      <path> [--flags]`, `$name.id` interpolation, bare steps after the first, quoting, blank lines — with one complete four-line
-      example instead of the single shell line it has now.
-- [ ] Say what `--preview` guarantees, and make it guarantee more: validate required flags and unknown flags per step, so a
-      preview that passes means the file *could* run. If it stays syntactic, the help must say "preview reads the file, it does
-      not check refusals".
-- [ ] The "WRITES" banner is wrong on `plan`: it has no `--dry-run`. Either give it one or suppress the line for this verb.
-- [ ] Fix `docs/operating.md`'s example to the accepted word order — or accept both orders in the parser, which is friendlier for
-      anyone who learned the docs first.
+- [x] `btid help plan` prints a **FILE** block: one step per line, `let <name> = <verb> …`, `$<name>.<field>`, `#` comments —
+      then **A WHOLE FILE**, four lines that run. The words live in `help-text.ts` (`PLAN_FILE`), so the page and the manifest
+      cannot drift: `help --json` carries the same block as `verbs[plan].file`.
+- [x] `--preview` now validates. `Verb` grew `needs?: readonly string[]` — the flags a shape cannot do without — set on the
+      eight rules that refuse without one (`new task` → `--project --title`, `new project` → `--key --name`, `new person` →
+      `--handle`, `new task/<id>/step` and `rename` → `--name`, `move` → `--to`, `remove project|person` → `--yes`). `check()`
+      refuses a step that is missing one, before the first request:
+      `usage: step 1: new task needs --project — btid new task --project <id> --title <text> …`
+- [x] The WRITES banner is per-verb now (`kindWords`): `plan` reads *"one commit at the end; --preview reads the file and runs
+      nothing"* instead of promising a `--dry-run` it refuses.
+- [x] `docs/operating.md`'s example was the **old word order** (`person new ivan`, `task edit $task.id`) and taught a file the
+      parser refuses. Rewritten to the accepted form, and previewed to prove it parses.
+- [x] Two tests: the plan page teaches the file (and no longer promises `--dry-run`), and a step missing a required flag is
+      refused by `--preview` with exit 2 and nothing written.
 
 ## How to verify
 
-- `btid help plan` alone contains enough to write a file that runs: a reader with no access to `tests/` or `docs/` should manage
-  `let p = new project …` / `let t = new task --project $p.id …` / `edit task/$t.id …` / `promote task/$t.id`.
-- `btid plan <missing-a-flag> --preview` exits non-zero, or the help says plainly that it will not.
+- `btid help plan` — FILE + A WHOLE FILE, and `--preview reads the file and runs nothing`.
+- `btid help --json | jq '.verbs[] | select(.verb=="plan").file'` — the same grammar, machine-readable.
+- `printf 'let t = new task --title "No project"\n' > x.btid && btid plan x.btid --preview` — exit 2,
+  `step 1: new task needs --project`, nothing run.
+- `npm test` — 121 passing.
+
+## What this leaves
+
+`needs` covers the eight shapes whose handlers refuse a missing flag; a shape that gains one later must add it here too, and
+nothing enforces that yet. The cheap guard is a test that walks every rule whose handler calls `usage(` after a flag check and
+asserts it declares `needs` — worth doing when the list grows, or when one of them is added and a plan quietly stops being
+caught.

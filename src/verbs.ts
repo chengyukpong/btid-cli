@@ -249,6 +249,7 @@ const taskNew: Verb = {
   name: 'new task',
   summary: 'Create a row — or the store itself; the store mints the id.',
   usage: 'btid new task --project <id> --title <text> [--priority low|medium|high|urgent] [--json] [--dry-run]',
+  needs: ['project', 'title'],
   flags: { project: 'value', title: 'value', priority: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -475,6 +476,7 @@ const projectNew: Verb = {
   summary: 'Create one row; the store mints the id.',
   usage:
     'btid new project --key <key> --name <text> [--start day] [--end day] [--description text] [--color #hex] [--members ids] [--json] [--dry-run]',
+  needs: ['key', 'name'],
   flags: {
     key: 'value',
     name: 'value',
@@ -616,6 +618,7 @@ const personNew: Verb = {
   name: 'new person',
   summary: 'Create one row; the store mints the id.',
   usage: 'btid new person --handle <login> [--name text] [--role member|manager] [--json] [--dry-run]',
+  needs: ['handle'],
   flags: { handle: 'value', name: 'value', role: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -958,6 +961,7 @@ const projectRemove: Verb = {
   name: 'remove project/<id>',
   summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
   usage: 'btid remove project/<id> --yes [--cascade] [--json] [--dry-run]',
+  needs: ['yes'],
   flags: { yes: 'boolean', cascade: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -987,6 +991,7 @@ const personRemove: Verb = {
   name: 'remove person/<id>',
   summary: `Delete a row, detach a label, or remove a step. A row needs --yes (${removeFlagHelp}).`,
   usage: 'btid remove person/<id> --yes [--json] [--dry-run]',
+  needs: ['yes'],
   flags: { yes: 'boolean', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -1383,6 +1388,7 @@ const stepNew: Verb = {
   name: 'new task/<id>/step',
   summary: 'Create one row; the store mints the id.',
   usage: 'btid new task/<id>/step --name <text> [--json] [--dry-run]',
+  needs: ['name'],
   flags: { name: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -1413,6 +1419,7 @@ const stepMove: Verb = {
   name: 'move task/<id>/step/<step-id>',
   summary: 'Move a step to a position. A position past the end means last.',
   usage: 'btid move task/<id>/step/<step-id> --to <n> [--json] [--dry-run]',
+  needs: ['to'],
   flags: { to: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {
@@ -1451,6 +1458,7 @@ const stepRename: Verb = {
   name: 'rename task/<id>/step/<step-id>',
   summary: 'Rename one step.',
   usage: 'btid rename task/<id>/step/<step-id> --name <text> [--json] [--dry-run]',
+  needs: ['name'],
   flags: { name: 'value', 'dry-run': 'boolean' },
   writes: true,
   async run(context) {

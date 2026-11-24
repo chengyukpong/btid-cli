@@ -303,6 +303,16 @@ export function check(plan: Plan): Plan | { message: string } {
     if (!command && !reads) {
       return { message: `a plan runs commands; “${rule.verb}” is a report` }
     }
+
+    // A flag the shape cannot do without, refused here rather than at the step that needs it: `--preview` promises to read the
+    // file before anything runs, and a file that dies at step fourteen has not been read, it has been started.
+    const missing = (rule.handler.needs ?? []).filter((flag) => step.flags[flag] === undefined)
+    if (missing.length > 0) {
+      const form = rule.path === null ? rule.verb : `${rule.verb} ${rule.path}`
+      return {
+        message: `step ${step.at}: ${form} needs ${missing.map((flag) => `--${flag}`).join(', ')} — ${rule.handler.usage}`,
+      }
+    }
     for (const [index, arg] of step.args.entries()) {
       const problem = checkRef(arg, bound)
       if (problem !== null) return { message: `step ${step.at}: ${problem}` }

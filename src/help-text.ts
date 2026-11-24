@@ -166,3 +166,25 @@ export const CONCEPTS: readonly { term: string; what: string }[] = [
     what: 'ls only: key=value filters and a sort word — btid ls task projectId=alpha status=todo due',
   },
 ]
+
+/**
+ * What a plan **file** is, in the words `btid help plan` prints.
+ *
+ * This lives here, and not only in `docs/`, because the help page is the front door: a file format described only in a
+ * document is a format half its readers cannot find, and the half that cannot find it writes a file the parser refuses. The
+ * example is a whole file — four lines that run — rather than the one shell line the page used to print.
+ */
+export const PLAN_FILE = {
+  grammar: [
+    'one step per line: <verb> <path> [data] [--flags] — the same words you would type',
+    'let <name> = <verb> …   binds what `new` returned, for later steps to address',
+    '$<name>.<field>         a field of a bound result: $task.id, $project.key',
+    '# a comment, to the end of the line — blank lines are ignored',
+  ],
+  example: [
+    'let poc   = new project --key poc --name "Audit Log PoC" --start 2026-11-24 --end 2027-01-08',
+    'let first = new task --project $poc.id --title "Write down what an audit event is"',
+    '            edit task/$first.id --assignee elias --estimate 2 --dod "One page."',
+    '            promote task/$first.id',
+  ],
+}

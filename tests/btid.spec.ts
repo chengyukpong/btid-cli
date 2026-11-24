@@ -971,6 +971,38 @@ describe('btid', () => {
     )
   })
 
+  it('teaches a plan file on the plan page, not only in a document', async () => {
+    // The question that wrote this test: could an agent write a plan from `btid help` alone? It could not — the page printed
+    // the flags and named a `seed.btid` it never described, and the file grammar lived only in `docs/`.
+    assert.equal(await btid(['help', 'plan']), 0)
+    assert.match(lines.text, /FILE/)
+    assert.match(lines.text, /let <name> = <verb>/)
+    assert.match(lines.text, /\$<name>\.<field>/)
+    assert.match(lines.text, /A WHOLE FILE/)
+    assert.match(lines.text, /let poc + = new project/)
+    // …and it must not promise `--dry-run`, which this verb refuses.
+    assert.doesNotMatch(lines.text, /WRITES.*--dry-run/)
+    assert.match(lines.text, /--preview reads the file and runs nothing/)
+
+    lines.written.length = 0
+    assert.equal(await btid(['help', '--json']), 0)
+    const manifest = lines.json[0] as { verbs: { verb: string; file?: { grammar: string[]; example: string[] } }[] }
+    const plan = manifest.verbs.find((verb) => verb.verb === 'plan')
+    assert.ok((plan?.file?.grammar.length ?? 0) >= 3)
+    assert.match(plan!.file!.grammar.join('\n'), /let <name>/)
+    assert.match(plan!.file!.example.join('\n'), /new project/)
+  })
+
+  it('refuses a plan whose step is missing a flag --preview would have caught', async () => {
+    // A preview that passes has to mean the file can run, not just that it parses: the flag a shape cannot do without is
+    // checked before the first request, with the verb's own usage line.
+    const path = await planFile('incomplete.btid', ['let t = new task --title "No project"'])
+    const code = await btid(['plan', path, '--preview'])
+    assert.equal(code, 2, lines.text)
+    assert.match(lines.text, /step 1: new task needs --project/)
+    assert.match(lines.text, /btid new task --project <id>/)
+    assert.equal(client.messages.length, 0)
+  })
   it('refuses an old spelling with the form that replaced it', async () => {
     const code = await btid(['task', 'show', 'alpha-a1b2'])
     assert.equal(code, 2)
