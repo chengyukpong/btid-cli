@@ -1,9 +1,9 @@
 # The test fixture expired on 23 November
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-24T15:52:00+08:00
 - **Finished:** 2026-11-24T16:02:00+08:00
-- **Approved:** —
+- **Approved:** 2026-11-24T17:23:46+08:00
 
 ## Description
 

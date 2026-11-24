@@ -1,9 +1,9 @@
 # A plan file's grammar is not in `btid help`
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-24T17:02:00+08:00
 - **Finished:** 2026-11-24T17:24:00+08:00
-- **Approved:** —
+- **Approved:** 2026-11-24T17:23:46+08:00
 
 ## Description
 
