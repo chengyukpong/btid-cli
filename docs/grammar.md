@@ -299,7 +299,9 @@ containing September's work. Backdating a commit would be rewriting history, whi
 | `task label add <id> ui` | `add task/<id>/label ui` |
 | `task step new <id> --name x` | `new task/<id>/step --name x` |
 | `task step done <id> <st-id>` | `tick task/<id>/step/<st-id>` |
-| `store init` / `store whoami` | `new store` / `whoami` |
+| `store init` / `store whoami` | `init store` / `whoami` |
+| `new store` (0.21 and earlier) | `init store owner/repo[@branch]` — the store is created, then remembered |
+| `--store owner/repo` on any verb | `switch store owner/repo[@branch]` to remember it, or `plan … --store=…` for one run |
 | `cache show` / `cache clear` | `show cache` / `clear cache` |
 
 - **Breaking.** 0.12.0, hard cut: the old spellings are refused with a message naming the new one, not silently accepted.

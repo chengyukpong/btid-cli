@@ -38,7 +38,7 @@ const { labelLs, labelAdd, labelRemove } = HANDLERS
 const { stepLs, stepShow, stepNew, stepMove, stepRename, tickStep, untickStep, stepRemove } = HANDLERS
 const { commentAdd, exemptionAdd, exemptionRemove } = HANDLERS
 const { cacheShow, cacheClear } = HANDLERS
-const { storeInit, storeWhoami, storeAdvance, personImpersonate, unimpersonate } = HANDLERS
+const { storeInit, storeSwitch, storeWhoami, storeAdvance, personImpersonate, unimpersonate } = HANDLERS
 const { plan, version } = HANDLERS
 
 /**
@@ -83,7 +83,9 @@ export const RULES: readonly Rule[] = [
   { verb: 'new', path: 'task', handler: taskNew, args: place, example: 'btid new task --project alpha --title "Check the header budgets"' },
   { verb: 'new', path: 'project', handler: projectNew, args: place },
   { verb: 'new', path: 'person', handler: personNew, args: place },
-  { verb: 'new', path: 'store', handler: storeInit, args: place },
+  // The store itself: creating one, and pointing this machine at one. Both name the target as their object.
+  { verb: 'init', path: 'store', handler: storeInit, args: place, example: 'btid init store yuk-org/btid-data3' },
+  { verb: 'switch', path: 'store', handler: storeSwitch, args: place, example: 'btid switch store yuk-org/btid-data4' },
   // Seeding a history: everything after this step is stamped with the day the plan says it happened.
   {
     verb: 'advance',
@@ -288,7 +290,9 @@ function wrongVerb(verb: string, shape: string): string {
     case 'undo task/<id>':
       return `${verb} applies to a step: ${verb} task/<id>/step/<step-id>`
     case 'show store':
-      return `${quoted('store')} has no show — btid whoami says who you are, btid new store creates one`
+      return `${quoted('store')} has no show — btid whoami says who you are, btid init store creates one`
+    case 'new store':
+      return `the grammar is btid init store owner/repo[@branch]`
     case 'new cache':
       return `${quoted('cache')} has no new — btid clear cache drops it, btid show cache reads it`
     default:
@@ -358,8 +362,9 @@ function oldSpelling(words: readonly string[]): string | null {
 
   if (first === 'store') {
     if (second === 'whoami') return 'the grammar is btid whoami'
-    if (second === 'init') return 'the grammar is btid new store'
-    return `${quoted('store')} is a path, not a verb. btid new store creates one`
+    if (second === 'init') return 'the grammar is btid init store owner/repo[@branch]'
+    if (second === 'switch') return 'the grammar is btid switch store owner/repo[@branch]'
+    return `${quoted('store')} is a path, not a verb. btid init store creates one; btid switch store points this machine at one`
   }
   if (first === 'cache') {
     if (second === 'show') return 'the grammar is btid show cache'

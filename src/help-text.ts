@@ -53,6 +53,7 @@ export const FLAG_HELP: Readonly<Record<string, string>> = {
   quiet: 'print only the outcome',
   role: 'manager|member',
   small: 'on|off — measured in hours rather than days',
+  store: '<owner/repo[@branch]> — the store this plan runs against; the saved one otherwise',
   start: '<day|instant|none> — when work begins',
   status: 'active|paused|done — the project’s state',
   title: '<text> — the task’s title',
@@ -63,7 +64,6 @@ export const FLAG_HELP: Readonly<Record<string, string>> = {
 
 /** Flags every command accepts, wherever it appears in the grammar. */
 export const GLOBAL_FLAGS: readonly string[] = [
-  'store',
   'json',
   'fresh',
   'verbose',
@@ -75,7 +75,6 @@ export const GLOBAL_FLAGS: readonly string[] = [
 
 /** The globals, spelled out: these are never on a verb's own usage line because they are always available. */
 export const GLOBAL_HELP: readonly FlagHelp[] = [
-  { name: 'store', takes: 'value', what: '<owner/repo> — which store; also BTID_STORE, or the saved one' },
   { name: 'json', takes: 'none', what: 'print the result as JSON' },
   { name: 'fresh', takes: 'none', what: 'ignore the cached snapshot and load from the store' },
   { name: 'verbose', takes: 'none', what: 'say what the command is doing' },
@@ -118,7 +117,9 @@ export const VERB_HELP: Readonly<Record<string, string>> = {
   impersonate: 'Act as somebody on the roster: every write after this is theirs. The manager may.',
   ls: 'List rows: tasks, projects, people, or a task’s steps and labels.',
   move: 'Move a step to a position; past the end means last.',
-  new: 'Create a row — or the store itself. The store mints the id and hands it back.',
+  new: 'Create a row. The store mints the id and hands it back.',
+  init: 'Create the store itself in a repository, with you as its manager.',
+  switch: 'Point this machine at another store, and remember it.',
   plan: 'Run a file of commands in order against one store, committing once at the end.',
   promote: 'Move a task one step up the ladder: backlog → todo → in progress → done.',
   remove: 'Take a named thing off a row, or delete the row itself (--yes).',
@@ -139,6 +140,7 @@ export const VERB_GROUPS: readonly { kind: string; verbs: readonly string[] }[] 
   { kind: 'PUT ON AND TAKE OFF', verbs: ['add', 'remove'] },
   { kind: 'A STEP', verbs: ['tick', 'untick', 'rename', 'move'] },
   { kind: 'THE SESSION', verbs: ['advance', 'impersonate', 'unimpersonate'] },
+  { kind: 'THE STORE', verbs: ['switch', 'init'] },
   { kind: 'A FILE OF COMMANDS', verbs: ['plan'] },
   { kind: 'THE CACHE', verbs: ['clear'] },
   { kind: 'THE BINARY', verbs: ['version', 'help'] },

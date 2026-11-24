@@ -106,24 +106,34 @@ export const cachedLogin = (config: Config | null, token: string): string | null
     : null
 
 /**
- * Resolve the store from the three sources, in order.
+ * Save the store this machine should use.
  *
- * Returns the location and where it came from, so `btid store whoami` can say which of the three answered — a person who
- * thought they were pointed at staging should be able to see that they were not.
+ * The **only** writer of the config's store, called by `init store` and `switch store` — a command that merely runs against
+ * a store must not change which store the next command uses. `plan --store` deliberately does not call it: a plan's store is
+ * a property of that run.
  */
-export function resolveStore(
-  flags: { store?: string },
-  env: NodeJS.ProcessEnv,
-  file: Config | null,
-): { store: StoreLocation; from: 'flag' | 'env' | 'file' } | null {
-  if (flags.store !== undefined) {
-    const location = parseStore(flags.store)
-    return location === null ? null : { store: location, from: 'flag' }
+export function saveStore(location: StoreLocation, path: string = configPath()): void {
+  try {
+    const existing = readConfigFile(path)
+    const next = {
+      store: `${location.owner}/${location.repo}@${location.ref}`,
+      ...(existing?.login === undefined ? {} : { login: existing.login }),
+      ...(existing?.tokenFingerprint === undefined ? {} : { tokenFingerprint: existing.tokenFingerprint }),
+    }
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8')
+  } catch {
+    /* A read-only home is not worth failing the command that already did its work. */
   }
-  const fromEnv = env['BTID_STORE']
-  if (fromEnv !== undefined) {
-    const location = parseStore(fromEnv)
-    return location === null ? null : { store: location, from: 'env' }
-  }
-  return file === null ? null : { store: file.store, from: 'file' }
+}
+
+/**
+ * The store this machine is pointed at, from the config file — the only source now that `--store` and `BTID_STORE` are
+ * gone.
+ *
+ * Returns where it came from, so `btid whoami` can say `(file)`; `init store` and `switch store` are the two commands that
+ * change it, and a `plan --store` run reports `(plan)` for that invocation only.
+ */
+export function savedStore(file: Config | null): StoreLocation | null {
+  return file === null ? null : file.store
 }

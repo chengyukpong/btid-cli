@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
 import { beforeEach, describe, it } from 'vitest'
 import { EXPECT } from 'btid-core'
 import { CLI_VERSION } from '../src/version'
@@ -98,7 +99,7 @@ const { join } = require('node:path') as typeof import('node:path')
 
 const btid = (argv: string[]) =>
   run({
-    argv: ['--store', 'chengyukpong/btid-data', ...argv],
+    argv,
     env: { BTID_TOKEN: 'test-token' },
     out: consoleOutput((text) => lines.write(text)),
     clientFor: () => client,
@@ -114,6 +115,8 @@ describe('btid', () => {
     const { join } = await import('node:path')
     const { tmpdir } = await import('node:os')
     workspace = await mkdtemp(join(tmpdir(), 'btid-batch-'))
+    // This machine is pointed at the store the way `switch store` would: the config file is the only source now.
+    writeFileSync(join(workspace, 'config.json'), JSON.stringify({ store: 'chengyukpong/btid-data' }))
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
     client.put('people.json', { [managerRow.id]: managerRow })
@@ -1067,7 +1070,8 @@ describe('btid', () => {
 
     // The page's own scaffolding is in the manifest too, so an agent gets the exit codes without scraping prose.
     assert.ok(manifest.exitCodes.some((entry) => entry.code === 5 && /no store/.test(entry.when)))
-    assert.ok(manifest.globals.some((flag) => flag.name === 'store'))
+    // --store is a plan's own flag now; the globals no longer carry it.
+    assert.ok(!manifest.globals.some((flag) => flag.name === 'store'), '--store belongs to plan')
     assert.equal(manifest.usage, 'btid <verb> <path> [data] [--flags]')
   })
 
@@ -1142,7 +1146,7 @@ describe('btid', () => {
     let asked = 0
     const call = (argv: string[]) =>
       run({
-        argv: ['--store', 'chengyukpong/btid-data', ...argv],
+        argv,
         // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
       // workspace: the one spec that is *about* logging turns it back on.
       env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
@@ -1179,7 +1183,7 @@ describe('btid', () => {
     )
     let asked = 0
     const code = await run({
-      argv: ['--store', 'chengyukpong/btid-data', 'whoami'],
+      argv: ['whoami'],
       // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
       // workspace: the one spec that is *about* logging turns it back on.
       env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
@@ -1221,7 +1225,7 @@ describe('btid', () => {
     const calls: string[] = []
     lines.written.length = 0
     const code = await run({
-      argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task'],
+      argv: ['ls', 'task'],
       // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
       // workspace: the one spec that is *about* logging turns it back on.
       env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
@@ -1277,7 +1281,7 @@ describe('btid', () => {
 
     lines.written.length = 0
     const code = await run({
-      argv: ['--store', 'chengyukpong/btid-data', 'new', 'task', '--project', 'alpha', '--title', 'Two'],
+      argv: ['new', 'task', '--project', 'alpha', '--title', 'Two'],
       // The log is on by default now, and a test that asserts a table's shape should not also grow a log file in its
       // workspace: the one spec that is *about* logging turns it back on.
       env: { BTID_TOKEN: 'test-token', BTID_LOG: '0' },
@@ -1381,9 +1385,36 @@ describe('btid', () => {
       cacheDir: workspace,
     })
     assert.equal(code, 2)
-    assert.match(lines.text, /--store owner\/repo/)
-    assert.match(lines.text, /BTID_STORE/)
+    assert.match(lines.text, /btid init store owner\/repo/)
+    assert.match(lines.text, /btid switch store owner\/repo/)
     assert.match(lines.text, /no default repository on purpose/)
+  })
+
+  it('keeps --store for plan alone, and says which command changes the store', async () => {
+    const code = await btid(['ls', 'task', '--store', 'chengyukpong/btid-other'])
+    assert.equal(code, 2)
+    assert.match(lines.text, /--store belongs to plan/)
+    assert.match(lines.text, /btid switch store owner\/repo/)
+  })
+
+  it('switch store points this machine at another store, and saves it', async () => {
+    const { readFileSync } = await import('node:fs')
+    assert.equal(await btid(['switch', 'store', 'chengyukpong/btid-other@staging']), 0)
+    assert.match(lines.text, /saved/)
+
+    const written = JSON.parse(readFileSync(join(workspace, 'config.json'), 'utf8')) as { store: string }
+    assert.equal(written.store, 'chengyukpong/btid-other@staging')
+
+    // And the next command runs against it, without being told again.
+    lines.written.length = 0
+    assert.equal(await btid(['whoami']), 0)
+    assert.match(lines.text, /chengyukpong\/btid-other@staging/)
+  })
+
+  it('refuses a switch to a location that is not owner/repo', async () => {
+    const code = await btid(['switch', 'store', 'not-a-store'])
+    assert.equal(code, 2)
+    assert.match(lines.text, /takes owner\/repo/)
   })
 
   it('a fault exits with the engine’s number, not a refusal’s', async () => {

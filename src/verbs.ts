@@ -1123,8 +1123,8 @@ const personShow: Verb = {
 const plan: Verb = {
   name: 'plan',
   summary: 'Run a file of commands in order against one store, committing once at the end.',
-  usage: 'btid plan <file|-> [--commit=end|each] [--continue] [--quiet] [--preview] [--json]',
-  flags: { commit: 'value', continue: 'boolean', quiet: 'boolean', preview: 'boolean' },
+  usage: 'btid plan <file|-> [--commit=end|each] [--continue] [--quiet] [--preview] [--store=owner/repo[@branch]] [--json]',
+  flags: { commit: 'value', continue: 'boolean', quiet: 'boolean', preview: 'boolean', store: 'value' },
   writes: true,
   async run(context) {
     const file = context.args[0]
@@ -1621,20 +1621,37 @@ const storeWhoami: Verb = {
 }
 
 const storeInit: Verb = {
-  name: 'new store',
-  summary: 'Create one row; the store mints the id.',
-  usage: 'btid new store [--json]',
+  name: 'init store',
+  summary: 'Create a store in a repository: the config, and a roster holding you as manager.',
+  usage: 'btid init store <owner/repo[@branch]> [--json]',
   writes: true,
   async run(context) {
     // The store is already created by the time a verb runs (the dispatcher uses initStore for this verb), so there is
-    // nothing to write here — saying who it made is the whole answer.
+    // nothing to write here — saying who it made is the whole answer. The location is saved by the dispatcher.
     const actor = context.store.actor
     if (context.json) {
-      context.out.json({ created: true, manager: actor })
+      context.out.json({ created: true, store: context.location, manager: actor })
       return 0
     }
     context.out.line(`init  ${describeStore(context.location)}`)
     context.out.line(`      manager ${context.store.handle ?? '(unknown)'}`)
+    return 0
+  },
+}
+
+const storeSwitch: Verb = {
+  name: 'switch store',
+  summary: 'Point this machine at another store, and remember it.',
+  usage: 'btid switch store <owner/repo[@branch]> [--json]',
+  async run(context) {
+    // The dispatcher has already opened it — opening is the validation, so a typo fails here rather than saving a
+    // location every later command would choke on — and saved it, because switching is what this verb is for.
+    if (context.json) {
+      context.out.json({ store: context.location, manager: context.store.handle })
+      return 0
+    }
+    context.out.line(`store  ${describeStore(context.location)}  (saved)`)
+    context.out.line(`       manager ${context.store.handle ?? '(unknown)'}`)
     return 0
   },
 }
@@ -1777,6 +1794,7 @@ export const HANDLERS = {
   cacheShow,
   cacheClear,
   storeInit,
+  storeSwitch,
   storeWhoami,
   storeAdvance,
   personImpersonate,

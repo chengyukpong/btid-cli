@@ -4,7 +4,7 @@ import type { Store, StoreBackend } from 'btid-core'
 import { initStore, localIso, openStore, exitCodeOf, StoreFaultError, isStoreFault, type LogSink } from 'btid-core'
 import { both, defaultLogPath, fileSink, stderrSink } from './log'
 import { resolveToken, whoAmI } from './auth'
-import { cachedLogin, configPath, readConfigFile, rememberLogin, resolveStore, type StoreLocation } from './config'
+import { cachedLogin, configPath, parseStore, readConfigFile, rememberLogin, saveStore, savedStore, type StoreLocation } from './config'
 import { cacheRoot, dropSnapshot, readSnapshot, snapshotPath, writeSnapshot } from './snapshot'
 import { resolve } from './grammar'
 import { helpText } from './help'
@@ -286,10 +286,20 @@ async function dispatch(
 
   // A flag the verb does not declare is a mistake, not something to ignore: silently dropping it is how a typo becomes
   // "needs at least one field to change", which is the wrong sentence for the wrong problem.
-  const global = new Set(['store', 'json', 'help', 'v', 'version', 'fresh', 'verbose', 'log-file', 'no-log'])
+  const global = new Set(['json', 'help', 'v', 'version', 'fresh', 'verbose', 'log-file', 'no-log'])
   const declared = new Set([...Object.keys(handler.flags ?? {}), ...global])
   const unknownFlags = Object.keys(flags).filter((flag) => !declared.has(flag))
   if (unknownFlags.length > 0) {
+    // `--store` is now a plan's own flag: on any other verb the sentence names the command that changes the store.
+    if (unknownFlags.includes('store')) {
+      return usage(
+        rule.verb === 'plan'
+          ? 'plan takes --store owner/repo[@branch]'
+          : '--store belongs to plan; btid switch store owner/repo[@branch] changes the store this machine uses',
+        out,
+        json,
+      )
+    }
     // `promote` is the crossing and nothing else; a status is a different verb's business, and the sentence says which.
     if (rule.verb === 'promote') {
       const flag = unknownFlags[0]!
@@ -317,7 +327,7 @@ async function dispatch(
         store: undefined as never,
         logTarget,
         location: { owner: '', repo: '', ref: '' },
-        source: 'flag',
+        source: 'file',
         cacheDir: options.cacheDir ?? cacheRoot(),
         details: flags['details'] === true,
         args: rule.args(ids, data),
@@ -334,11 +344,24 @@ async function dispatch(
 
   const configFile = options.configPath === undefined ? configPath() : options.configPath
   const config = readConfigFile(configFile)
-  const resolved = resolveStore({ ...(typeof flags['store'] === 'string' ? { store: flags['store'] } : {}) }, env, config)
-  if (resolved === null) {
+
+  // Where this command's store comes from. Two commands name one as their object (`init store`, `switch store`), a plan may
+  // name one for its run alone, and everything else uses what the config saved — there is no other source, deliberately.
+  const named = rule.path === 'store' && (rule.verb === 'init' || rule.verb === 'switch') ? (data[0] ?? '') : ''
+  const fromPlan = rule.verb === 'plan' && typeof flags['store'] === 'string' ? String(flags['store']) : ''
+
+  const target = named !== '' ? parseStore(named) : fromPlan !== '' ? parseStore(fromPlan) : savedStore(config)
+  const source: 'file' | 'plan' = named !== '' || fromPlan !== '' ? 'plan' : 'file'
+  if (named !== '' && parseStore(named) === null) {
+    return usage(`${rule.verb} store takes owner/repo[@branch] — for example btid ${rule.verb} store yuk-org/btid-data3`, out, json)
+  }
+  if (fromPlan !== '' && parseStore(fromPlan) === null) {
+    return usage('plan --store takes owner/repo[@branch] — for example plan seed.btid --store yuk-org/btid-test', out, json)
+  }
+  if (target === null) {
     out.line(
-      'No store. Pass --store owner/repo[@branch], set BTID_STORE, or write ~/.config/btid/config.json. ' +
-        'There is no default repository on purpose.',
+      'No store. Create one with btid init store owner/repo[@branch], or point this machine at an existing one with ' +
+        'btid switch store owner/repo[@branch]. There is no default repository on purpose.',
     )
     return 2
   }
@@ -347,7 +370,7 @@ async function dispatch(
   try {
     const token = options.tokenFor === undefined ? resolveToken(undefined, env).token : options.tokenFor()
     const login = await loginFor(token, config, options)
-    opened = await connect(resolved.store, token, login, rule.verb === 'new' && rule.path === 'store', {
+    opened = await connect(target, token, login, rule.verb === 'init' && rule.path === 'store', {
       ...(options.clientFor === undefined ? {} : { clientFor: options.clientFor }),
       ...(options.cacheDir === undefined ? {} : { cacheDir: options.cacheDir }),
       fresh: options.fresh === true || flags['fresh'] === true,
@@ -356,7 +379,10 @@ async function dispatch(
     })
     // Remember the answer for the next command: one saved request per invocation, and the token is fingerprinted so a
     // different credential never inherits somebody else's name.
-    rememberLogin(login, token, resolved.store, configFile)
+    // Remember who this token is (so the next command can skip GET /user) — but never the store: only init store and
+    // switch store change which store this machine uses, and a plan's --store is that run's alone.
+    rememberLogin(login, token, null, configFile)
+    if (rule.path === 'store' && (rule.verb === 'init' || rule.verb === 'switch')) saveStore(target, configFile)
   } catch (error) {
     return fault(error, out, json)
   }
@@ -367,8 +393,8 @@ async function dispatch(
     const context: VerbContext = {
       store,
       logTarget,
-      location: resolved.store,
-      source: resolved.from,
+      location: target,
+      source,
       cacheDir: options.cacheDir ?? cacheRoot(),
       details: flags['details'] === true,
       args: rule.args(ids, data),
@@ -416,7 +442,7 @@ async function dispatch(
     return fault(error, out, json)
   } finally {
     // Which store answered is worth one line of stderr on a bad day, and worth none on a good one.
-    if (process.env['BTID_DEBUG'] === '1') process.stderr.write(`store ${describeStore(resolved.store)}\n`)
+    if (process.env['BTID_DEBUG'] === '1') process.stderr.write(`store ${describeStore(target)}\n`)
   }
 }
 

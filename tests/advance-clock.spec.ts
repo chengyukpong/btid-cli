@@ -50,7 +50,7 @@ let workspace: string
 
 const btid = (argv: string[]) =>
   run({
-    argv: ['--store', 'chengyukpong/btid-data', ...argv],
+    argv,
     env: { BTID_TOKEN: 'test-token' },
     out: consoleOutput((text) => lines.write(text)),
     clientFor: () => client,
@@ -70,6 +70,8 @@ const rows = (): Record<string, { activities?: { day: string }[]; createdAt?: st
 describe('a plan that seeds a week', () => {
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), 'btid-seed-'))
+    /** This machine is pointed at the store the way switch store would: the config file is the only source now. */
+    writeFileSync(join(workspace, 'config.json'), JSON.stringify({ store: 'chengyukpong/btid-data' }))
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
     client.put('people.json', { [managerRow.id]: managerRow, [ivanRow.id]: ivanRow })

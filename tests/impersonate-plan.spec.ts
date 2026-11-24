@@ -45,7 +45,7 @@ let login = 'chengyukpong'
 
 const btid = (argv: string[]) =>
   run({
-    argv: ['--store', 'yuk-org/btid-ete-data', ...argv],
+    argv,
     env: { BTID_TOKEN: 'test-token' },
     out: consoleOutput((text) => lines.write(text)),
     clientFor: () => client,
@@ -62,6 +62,8 @@ describe('impersonate in a plan', () => {
   beforeEach(() => {
     login = 'chengyukpong'
     workspace = mkdtempSync(join(tmpdir(), 'btid-as-'))
+    /** This machine is pointed at the store the way switch store would: the config file is the only source now. */
+    writeFileSync(join(workspace, 'config.json'), JSON.stringify({ store: 'yuk-org/btid-ete-data' }))
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
     client.put('people.json', {

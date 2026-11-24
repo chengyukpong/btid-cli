@@ -78,7 +78,7 @@ describe('the CLI log', () => {
     const stdout = new Lines()
     const stderr = extra.stderr ?? new Lines()
     const code = await run({
-      argv: ['--store', 'chengyukpong/btid-data', ...argv],
+      argv,
       env: { BTID_TOKEN: 'test-token' },
       out: consoleOutput((text) => stdout.write(text)),
       stderr: (text) => stderr.write(text),
@@ -93,6 +93,8 @@ describe('the CLI log', () => {
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), 'btid-cli-log-'))
+    /** This machine is pointed at the store the way switch store would: the config file is the only source now. */
+    writeFileSync(join(workspace, 'config.json'), JSON.stringify({ store: 'chengyukpong/btid-data' }))
     client = new FakeClient()
     client.put('githubdb.json', { schemaVersion: EXPECT })
     client.put('people.json', { chengyukpong: managerRow })
@@ -183,7 +185,7 @@ describe('the CLI log', () => {
     assert.equal(quiet.stderr.text, '');
 
     const withEnv = await run({
-      argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task'],
+      argv: ['ls', 'task'],
       env: { BTID_TOKEN: 'test-token', BTID_LOG_FILE: '1' },
       out: consoleOutput(() => undefined),
       stderr: () => undefined,
@@ -198,7 +200,7 @@ describe('the CLI log', () => {
     // A flag still wins: an explicit path is the more specific instruction.
     const own = join(workspace, 'own.tsv');
     await run({
-      argv: ['--store', 'chengyukpong/btid-data', 'ls', 'task', '--log-file', own],
+      argv: ['ls', 'task', '--log-file', own],
       env: { BTID_TOKEN: 'test-token', BTID_LOG_FILE: 'ignored.tsv' },
       out: consoleOutput(() => undefined),
       stderr: () => undefined,

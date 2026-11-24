@@ -16,7 +16,8 @@ export interface VerbContext {
   /** Where the store is: `whoami` says it, and nothing else needs to. */
   location: { owner: string; repo: string; ref: string }
   /** Which of the three sources named it. */
-  source: 'flag' | 'env' | 'file'
+  /** Which of the two named it: the saved config, or this plan's own `--store`. */
+  source: 'file' | 'plan'
   /** Where snapshots live — the default for this machine, or wherever a test pointed it. */
   cacheDir: string
   /**
