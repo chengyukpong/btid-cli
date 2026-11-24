@@ -9,6 +9,28 @@ import { consoleOutput } from '../src/output'
 import { decodeSnapshot } from '../src/snapshot-codec'
 import { FakeClient, Lines } from './support'
 
+/**
+ * A day, counted from the day the test runs.
+ *
+ * The fixture used to be fixed dates, 2026-10-26 to 2026-11-23, and on 24 November every test that edits the project began
+ * failing with the core's `PROJECT_PAST_END`: an active project may not end in the past. A suite that dies of a calendar stops
+ * guarding anything, so the windows are stated relative to today and the fixture cannot expire.
+ */
+const day = (offset: number): string => {
+  const date = new Date()
+  date.setDate(date.getDate() + offset)
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return String(date.getFullYear()) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+}
+
+/** The fixture task's window, inside the project's: named so the assertions that print a date read the same value. */
+const TASK_START = day(-3)
+const TASK_END = day(3)
+
+/** A project window around today, for the tests that create one: the same reason a fixture cannot be fixed. */
+const PROJECT_START = day(-20)
+const PROJECT_END = day(20)
+
 // The CLI's whole claim is that it holds no rules: every refusal below is the core's sentence, and the exit code is the
 // only thing this project decides. So the tests drive `run` — the real dispatcher, the real core — against a fake
 // repository, and assert on the transcript.
@@ -31,8 +53,8 @@ const project = {
   members: [],
   color: '#1867C0',
   labels: [],
-  startDate: '2026-10-26',
-  endDate: '2026-11-23',
+  startDate: day(-29),
+  endDate: day(30),
   createdAt: '2026-11-01T09:00:00+08:00',
   updatedAt: '2026-11-01T09:00:00+08:00',
 }
@@ -53,8 +75,8 @@ const task = (over: Record<string, unknown> = {}) => ({
   blockedReason: '',
   tracked: true,
   isSmall: false,
-  startDate: '2026-11-09',
-  endDate: '2026-11-13',
+  startDate: TASK_START,
+  endDate: TASK_END,
   estimateDays: 4,
   labels: [],
   blockedBy: [],
@@ -159,18 +181,18 @@ describe('btid', () => {
   })
 
   it('refuses a tracked end day moved without a note — the sentence is the core’s', async () => {
-    const code = await btid(['edit', 'task/alpha-a1b2', '--end', '2026-11-20'])
+    const code = await btid(['edit', 'task/alpha-a1b2', '--end', day(6)])
     assert.equal(code, 1)
     assert.match(lines.text, /refused: Changing the end day of a tracked task needs a reason\. \(END_DATE_NEEDS_REASON\)/)
     assert.equal(client.messages.length, 0, 'nothing was committed')
   })
 
   it('takes the move when the note is given, and commits once', async () => {
-    const code = await btid(['edit', 'task/alpha-a1b2', '--end', '2026-11-20', '--note', 'Client moved it.'])
+    const code = await btid(['edit', 'task/alpha-a1b2', '--end', day(6), '--note', 'Client moved it.'])
     assert.equal(code, 0)
     assert.equal(client.messages.length, 1)
     assert.match(client.messages[0]!, /^edit alpha-a1b2/)
-    assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['endDate'], '2026-11-20')
+    assert.equal(client.json('projects/alpha/tasks.json')['alpha-a1b2']!['endDate'], day(6))
   })
 
   it('writes nothing with --dry-run, and says what it would have written', async () => {
@@ -182,9 +204,9 @@ describe('btid', () => {
   })
 
   it('creates a project with a window, so the very next capture works', async () => {
-    const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta Two', '--start', '2026-11-02', '--end', '2026-11-30'])
+    const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta Two', '--start', PROJECT_START, '--end', PROJECT_END])
     assert.equal(code, 0)
-    assert.equal(client.json('projects/beta/project.json')['beta']!['startDate'], '2026-11-02')
+    assert.equal(client.json('projects/beta/project.json')['beta']!['startDate'], PROJECT_START)
 
     lines.written.length = 0
     const captured = await btid(['new', 'task', '--project', 'beta', '--title', 'First work'])
@@ -195,7 +217,7 @@ describe('btid', () => {
   it('takes a window that ends before it starts, and refuses the commit with the core’s sentence', async () => {
     // The row is writable; the warning is what stops the write. That is the level the SPA shows as a bar and the CLI as a
     // refused batch, and both print the same words.
-    const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta', '--start', '2026-11-30', '--end', '2026-11-02'])
+    const code = await btid(['new', 'project', '--key', 'beta', '--name', 'Beta', '--start', PROJECT_END, '--end', PROJECT_START])
     assert.equal(code, 1)
     assert.match(lines.text, /PROJECT_WINDOW_INVALID/)
     assert.match(lines.text, /A project cannot end before it starts\./)
@@ -280,13 +302,13 @@ describe('btid', () => {
 
 
   it('gives an existing project its window with project edit, in one commit', async () => {
-    const code = await btid(['edit', 'project/alpha', '--start', '2026-11-02', '--end', '2026-11-30'])
+    const code = await btid(['edit', 'project/alpha', '--start', PROJECT_START, '--end', PROJECT_END])
     assert.equal(code, 0)
     assert.equal(client.messages.length, 1)
     assert.match(client.messages[0]!, /^project edit alpha/)
     const project = client.json('projects/alpha/project.json')['alpha']!
-    assert.equal(project['startDate'], '2026-11-02')
-    assert.equal(project['endDate'], '2026-11-30')
+    assert.equal(project['startDate'], PROJECT_START)
+    assert.equal(project['endDate'], PROJECT_END)
   })
 
   it('says a project is gone instead of throwing', async () => {
@@ -307,8 +329,8 @@ describe('btid', () => {
       '--blocked', 'on',
       '--blocked-reason', 'Waiting for the header',
       '--blocked-by', 'alpha-c3d4',
-      '--start', '2026-11-10',
-      '--end', '2026-11-20',
+      '--start', day(-2),
+      '--end', day(6),
       '--priority', 'urgent',
       '--note', 'Everything at once.',
     ])
@@ -323,8 +345,8 @@ describe('btid', () => {
     assert.equal(row['blocked'], true)
     assert.equal(row['blockedReason'], 'Waiting for the header')
     assert.deepEqual(row['blockedBy'], ['alpha-c3d4'])
-    assert.equal(row['startDate'], '2026-11-10')
-    assert.equal(row['endDate'], '2026-11-20')
+    assert.equal(row['startDate'], day(-2))
+    assert.equal(row['endDate'], day(6))
     assert.equal(row['priority'], 'urgent')
   })
 
@@ -349,8 +371,8 @@ describe('btid', () => {
     const code = await btid([
       'edit', 'task/alpha-a1b2',
       '--small', 'on',
-      '--start', '2026-11-10',
-      '--end', '2026-11-20',
+      '--start', day(-2),
+      '--end', day(6),
       '--note', 'Trying to book a day as a short task.',
     ])
     assert.equal(code, 3, 'a schema refusal is a fault: exit 3, like the engine')
@@ -781,10 +803,10 @@ describe('btid', () => {
       [
         '# a store, one row at a time',
         'let ivan  = new person --handle ivan --name Ivan',
-        'let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18',
+        `let gamma = new project --key gamma --name "Gamma" --start ${day(-20)} --end ${day(20)}`,
         'let task  = new task --project $gamma.id --title "First task"',
         '            add project/$gamma.id/member $ivan.id',
-        '            edit task/$task.id --assignee $ivan.id --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
+        `            edit task/$task.id --assignee $ivan.id --start ${day(-3)} --end ${day(3)} --estimate 2 --dod "Done."`,
         '            promote task/$task.id',
       ].join('\n'),
     )
@@ -809,9 +831,9 @@ describe('btid', () => {
     const path = await planFile(
       'two.btid',
       [
-        'let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18',
+        `let gamma = new project --key gamma --name "Gamma" --start ${day(-20)} --end ${day(20)}`,
         'let task  = new task --project $gamma.id --title "Only one"',
-        '            edit task/$task.id --assignee chengyukpong --start 2026-11-09 --end 2026-11-13 --estimate 2 --dod "Done."',
+        `            edit task/$task.id --assignee chengyukpong --start ${day(-3)} --end ${day(3)} --estimate 2 --dod "Done."`,
         '            promote task/$task.id',
       ].join('\n'),
     )
@@ -826,8 +848,8 @@ describe('btid', () => {
     const path = await planFile(
       'bad.btid',
       [
-        'let gamma = new project --key gamma --name "Gamma" --start 2026-11-03 --end 2026-12-18',
-        '            new project --key gamma --name "Gamma again" --start 2026-11-03 --end 2026-12-18',
+        `let gamma = new project --key gamma --name "Gamma" --start ${day(-20)} --end ${day(20)}`,
+        `            new project --key gamma --name "Gamma again" --start ${day(-20)} --end ${day(20)}`,
       ].join('\n'),
     )
 
@@ -880,8 +902,8 @@ describe('btid', () => {
             path: 'task/$task.id',
             flags: {
               assignee: 'chengyukpong',
-              start: '2026-11-09',
-              end: '2026-11-13',
+              start: TASK_START,
+              end: TASK_END,
               estimate: 2,
               dod: 'Done.',
             },
@@ -915,13 +937,13 @@ describe('btid', () => {
     await btid(['show', 'task/alpha-a1b2', '--json'])
     const row = lines.json[0] as Record<string, unknown>
     assert.equal(row['id'], 'alpha-a1b2')
-    assert.equal(row['endDate'], '2026-11-13')
+    assert.equal(row['endDate'], TASK_END)
     assert.ok(Array.isArray(row['steps']))
   })
 
   it('--fields projects the table and the JSON the same way', async () => {
     await btid(['ls', 'task', '--fields', 'title,endDate', '--json'])
-    assert.deepEqual(lines.json[0], [{ title: 'Write the failing test', endDate: '2026-11-13' }])
+    assert.deepEqual(lines.json[0], [{ title: 'Write the failing test', endDate: TASK_END }])
 
     lines.written.length = 0
     await btid(['ls', 'task', '--fields', 'title,length'])

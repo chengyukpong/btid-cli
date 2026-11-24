@@ -27,3 +27,10 @@ see a fake repository.
 
 One command from the workspace root runs all three suites in dependency order and exits non-zero on the first failure; a CI run
 on a pushed commit does the same against a clean checkout.
+
+## 24 November: it happened
+
+The first consequence is on the record now. This suite went **red on 24 November** — five tests, one cause: a fixture project whose
+window ended on 2026-11-23, refused by `PROJECT_PAST_END` the day after. It stayed red until somebody happened to run `npm test`
+while building a release. Nothing was watching, which is exactly what this item says, and the fix for the fixture is recorded in
+`the-test-fixture-expired-on-23-november.md`.
