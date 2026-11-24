@@ -45,16 +45,35 @@ its place in a plan.
 The case for: with the flag gone, "which store" can only change through a verb that says so, and no command can quietly
 read one store and write another. That matches the existing rule that there is no default store at all.
 
-The cost, which needs a decision: without `--store` there is **no way to point a single command at another store** — the
-`btid ls task --store other/team` side trip disappears, and so does a CI pipeline parameterised by a flag. Two ways to
-keep that door open:
+**Decided (user, 2026-11-25):** the flag goes, and the one case that needed it — a *plan* that works across stores — gets its
+own spelling:
 
-1. **`BTID_STORE` stays, and stops persisting.** The environment is a session's own business; only `switch store` writes
-   the config file. Scripts keep working, and nothing is remembered behind the person's back.
-2. **A temporary switch**: `switch store x/y --once` (or `--no-save`), refused for `init`.
+```
+switch store yuk-org/btid-test --session
+```
 
-My preference is (1): it needs no new flag, it makes `switch store` the single writer, and env-as-session is a rule people
-already understand.
+`--session` means "for the rest of this run, and nothing remembered". Without it, `switch store` is the persisting act that
+writes `~/.config/btid/config.json`. `BTID_STORE` goes too: one way to say it, one way to remember it.
+
+## What `--session` actually asks for
+
+A plan runs every step against **one** store: `cli.ts` resolves the location and calls `openStore` once, before `dispatch`,
+and `runPlan` threads that `context.store` through each step. So `switch store --session` inside a plan is a **store
+boundary**, and two questions come with it.
+
+1. **What happens to uncommitted writes at the boundary?** A plan may run with `--commit=end`, which defers every write
+   into one commit at the last step. Switching stores mid-way has to flush the old store first — a boundary is a commit
+   point (`--commit=each` semantics for that segment) — or refuse the switch when writes are pending. I would flush: a
+   plan that changes stores is two pieces of work, and half of it cannot ride a commit into a repository it does not
+   belong to.
+2. **Do `let` bindings survive the switch?** They are ids from the old store. Referencing `$t.id` after switching would
+   write a row id into a different repository — the exact "wrong store" failure this whole change is about. I would tag
+   each binding with the store it came from and refuse a cross-store reference by name, at plan-check time, rather than
+   let it fail inside the engine.
+
+Outside a plan, `switch store … --session` has nothing to be a session *for*: one command is one process. Refused with
+guidance (`--session` is a plan step; drop it to remember the store), rather than accepted as a no-op.
+
 
 ## What breaks
 
