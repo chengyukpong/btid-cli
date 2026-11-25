@@ -1,5 +1,5 @@
-import type { Store } from 'btid-core'
-import type { CommandResult } from 'btid-core'
+import type { Store } from '@chengyukpong/btid-core'
+import type { CommandResult } from '@chengyukpong/btid-core'
 import type { Output } from './output'
 import { table, type Column } from './output'
 

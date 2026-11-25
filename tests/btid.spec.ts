@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import { beforeEach, describe, it } from 'vitest'
-import { EXPECT } from 'btid-core'
+import { EXPECT } from '@chengyukpong/btid-core'
 import { CLI_VERSION } from '../src/version'
 import { run } from '../src/cli'
 import { consoleOutput } from '../src/output'

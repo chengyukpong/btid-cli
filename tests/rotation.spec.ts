@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, it } from 'vitest'
-import type { LogEntry } from 'btid-core'
+import type { LogEntry } from '@chengyukpong/btid-core'
 import { fileSink } from '../src/log'
 
 // One live file, dated archives: `btid.log` today, `btid-20261114.log` once tomorrow's first line arrives. The rule is the user's

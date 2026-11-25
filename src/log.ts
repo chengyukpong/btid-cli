@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
-import { localIso, type LogEntry, type LogSink } from 'btid-core'
+import { localIso, type LogEntry, type LogSink } from '@chengyukpong/btid-core'
 
 /**
  * Where the CLI's log goes.

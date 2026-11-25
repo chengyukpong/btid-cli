@@ -1,4 +1,4 @@
-import type { StoreClient, CommitResult, FileChange, TagOptions, TreeListing } from 'githubdb'
+import type { StoreClient, CommitResult, FileChange, TagOptions, TreeListing } from '@chengyukpong/githubdb'
 
 /**
  * A repository that keeps its files in memory.

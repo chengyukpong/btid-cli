@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { decodeSnapshot, encodeSnapshot } from './snapshot-codec'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { StoreSnapshot } from 'btid-core'
+import type { StoreSnapshot } from '@chengyukpong/btid-core'
 
 /**
  * The store, kept between commands — the browser's trick, with a file instead of IndexedDB.

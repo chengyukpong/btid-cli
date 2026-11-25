@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from 'btid-core'
-import type { BoardSort, CreateProjectInput, CreateTaskInput, Project, Store, Task, TaskHandle, User } from 'btid-core'
+import { BOARD_SORTS, EXPECT, STATUS_LABELS, STATUS_ORDER } from '@chengyukpong/btid-core'
+import type { BoardSort, CreateProjectInput, CreateTaskInput, Project, Store, Task, TaskHandle, User } from '@chengyukpong/btid-core'
 import { readPlan, runPlan } from './plan'
 import { cacheRoot, clearCache, listCache } from './snapshot'
 import { dayOf, describeStore, rowFields, table, wrapText } from './output'

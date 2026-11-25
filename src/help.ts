@@ -1,4 +1,4 @@
-import { ProjectSchema, TaskSchema, UserSchema } from 'btid-core'
+import { ProjectSchema, TaskSchema, UserSchema } from '@chengyukpong/btid-core'
 import {
   PATHS,
   VERB_NAMES,

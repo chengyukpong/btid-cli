@@ -1,29 +1,29 @@
 {
-  "name": "btid-cli",
-  "version": "0.22.0",
-  "private": true,
-  "description": "The BTID terminal front end: parse, one command from btid-core, print.",
-  "bin": {
-    "btid": "./dist/bin.bundle.js"
-  },
-  "files": [
-    "dist/bin.bundle.js"
-  ],
-  "scripts": {
-    "build": "tsc -p tsconfig.json && npm run bundle",
-    "bundle": "esbuild src/bin.ts --bundle --minify --platform=node --target=node20 --format=cjs --outfile=dist/bin.bundle.js",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepack": "npm run build",
-    "release": "node scripts/release.mjs"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "btid-core": "file:../btid-core/release/btid-core-0.32.2.tgz",
-    "esbuild": "^0.28.2",
-    "githubdb": "file:../githubdb/release/githubdb-2.2.0.tgz",
-    "typescript": "^5.7.2",
-    "vitest": "^3.0.5"
-  }
+    "name":  "btid-cli",
+    "version":  "0.22.0",
+    "private":  true,
+    "description":  "The BTID terminal front end: parse, one command from btid-core, print.",
+    "bin":  {
+                "btid":  "./dist/bin.bundle.js"
+            },
+    "files":  [
+                  "dist/bin.bundle.js"
+              ],
+    "scripts":  {
+                    "build":  "tsc -p tsconfig.json \u0026\u0026 npm run bundle",
+                    "bundle":  "esbuild src/bin.ts --bundle --minify --platform=node --target=node20 --format=cjs --outfile=dist/bin.bundle.js",
+                    "typecheck":  "tsc --noEmit",
+                    "test":  "vitest run",
+                    "test:watch":  "vitest",
+                    "prepack":  "npm run build",
+                    "release":  "node scripts/release.mjs"
+                },
+    "devDependencies":  {
+                            "@types/node":  "^22.10.2",
+                            "@chengyukpong/btid-core":  "^0.33.0",
+                            "esbuild":  "^0.28.2",
+                            "@chengyukpong/githubdb":  "^2.2.1",
+                            "typescript":  "^5.7.2",
+                            "vitest":  "^3.0.5"
+                        }
 }
