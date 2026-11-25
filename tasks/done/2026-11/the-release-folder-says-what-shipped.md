@@ -1,9 +1,9 @@
 # The release folder says what shipped
 
-- **Status:** in-progress
+- **Status:** done
 - **Created:** 2026-11-25T04:10:00+08:00
-- **Finished:** 2026-11-25T04:16:00+08:00
-- **Approved:** —
+- **Finished:** 2026-11-25T22:05:00+08:00
+- **Approved:** 2026-11-25T22:05:00+08:00
 
 ## Description
 

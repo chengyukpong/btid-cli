@@ -1,9 +1,9 @@
 # The lockfile pins tarballs that are not in the repository
 
-- **Status:** backlog
+- **Status:** done
 - **Created:** 2026-11-25T10:22:00+08:00
-- **Finished:** —
-- **Approved:** —
+- **Finished:** 2026-11-25T22:05:00+08:00
+- **Approved:** 2026-11-25T22:05:00+08:00
 
 ## Description
 
@@ -52,3 +52,8 @@ dependency carries its bytes, not its identity. Two builds of `2.2.0` are indist
 
 - `npm ci` in `btid-cli` on a machine that did not write the lock, from a clean `node_modules`.
 - After the fix, the same command should either succeed or say which tarball to build first — not fail with a checksum.
+
+## Superseded (2026-11-25)
+
+Done by the GitHub Packages migration: @chengyukpong/btid-core 0.33.0, @chengyukpong/githubdb 2.2.1 and 1.1.1 are
+published, every consumer depends on a version range, and no \ile:\ pin remains across the five repositories.
